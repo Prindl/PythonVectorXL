@@ -12,8 +12,44 @@
 #                                                                            #
 ##############################################################################
 import ctypes
-import enum
+import enum #to support python 3.4 and lower: python -m pip install enum34
 import sys
+
+def indent_counter(func):
+    def wrapper(self):
+        wrapper.indent += 1
+        tmp = func(self)
+        wrapper.indent -= 1
+        return tmp
+    wrapper.indent = 0
+    return wrapper
+
+@indent_counter
+def cls2str(self):
+    if cls2str.indent == 1:
+        tmp = ["Class " + type(self).__name__ + " Fields:"]
+    else:
+        tmp = []
+    spaces = " " * (4*cls2str.indent - 2) + "- "
+    for f in self._fields_:
+        tmp.append("\r\n{0}{1}".format(spaces, f[0]))
+        if "Array" in f[1].__name__:
+            tmp_array = [str(x) for x in getattr(self, f[0])]
+            tmp.append("({0}): [{1}]".format(f[1].__name__, ", ".join(tmp_array)))
+        elif issubclass(f[1], ctypes.Structure):
+            if hasattr(self, "_anonymous_"):
+                tmp.append("(Structure - {0})[Anonymous]: {1}".format(f[1].__name__, getattr(self, f[0])))
+            else:
+                tmp.append("(Structure - {0}): {1}".format(f[1].__name__, getattr(self, f[0])))
+        elif issubclass(f[1], ctypes.Union):
+            if hasattr(self, "_anonymous_"):
+                tmp.append("(Union - {0})[Anonymous]: {1}".format(f[1].__name__, getattr(self, f[0])))
+            else:
+                tmp.append("(Union - {0}): {1}".format(f[1].__name__, getattr(self, f[0])))
+        else:
+            tmp.append("({0}): {1}".format(f[1].__name__, getattr(self, f[0])))
+    return "".join(tmp)
+
 
 class XL_BUS_TYPE(enum.IntFlag):
     NONE     =    0
@@ -588,6 +624,7 @@ class s_xl_application_notification(ctypes.Structure):
         ("notifyReason", ctypes.c_uint),
         ("reserved", ctypes.c_uint*7),
     ]
+    __str__ = cls2str
 XL_APPLICATION_NOTIFICATION_EV = s_xl_application_notification
 
 class XL_SYNC_PULSE(enum.IntEnum):
@@ -602,6 +639,7 @@ class s_xl_sync_pulse_ev(ctypes.Structure):
         ("reserved", ctypes.c_uint),
         ("time", XLuint64),
     ]
+    __str__ = cls2str
 XL_SYNC_PULSE_EV = s_xl_sync_pulse_ev
 XL_MOST_SYNC_PULSE_EV = XL_SYNC_PULSE_EV
 XL_FR_SYNC_PULSE_EV = XL_SYNC_PULSE_EV
@@ -613,6 +651,7 @@ class s_xl_sync_pulse(ctypes.Structure):
         ("pulseCode", ctypes.c_ubyte),
         ("time", XLuint64),
     ]
+    __str__ = cls2str
 
 class XL_HWTYPE(enum.IntEnum):
     NONE = 0
@@ -736,6 +775,7 @@ class s_xl_lin_stat_param(ctypes.Structure):
         #for future use
         ("reserved", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XLlinStatPar = s_xl_lin_stat_param
 
 MAX_MSG_LEN = 8
@@ -783,6 +823,7 @@ class s_xl_can_msg(ctypes.Structure):
         ("res1", XLuint64),
         ("res2", XLuint64),
     ]
+    __str__ = cls2str
 
 class XL_DAIO_DATA(enum.IntEnum):
     GET = 32768
@@ -808,11 +849,13 @@ class s_xl_daio_data(ctypes.Structure):
         ("reserved1", ctypes.c_uint),
         ("reserved2", ctypes.c_uint),
     ]
+    __str__ = cls2str
 
 class s_xl_io_digital_data(ctypes.Structure):
     _fields_ = [
         ("digitalInputData", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_IO_DIGITAL_DATA = s_xl_io_digital_data
 
 class s_xl_io_analog_data(ctypes.Structure):
@@ -822,6 +865,7 @@ class s_xl_io_analog_data(ctypes.Structure):
         ("measuredAnalogData2", ctypes.c_uint),
         ("measuredAnalogData3", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_IO_ANALOG_DATA = s_xl_io_analog_data
 
 class u_xl_digital_analogue(ctypes.Union):
@@ -829,6 +873,7 @@ class u_xl_digital_analogue(ctypes.Union):
         ("digital", XL_IO_DIGITAL_DATA),
         ("analog", XL_IO_ANALOG_DATA),
     ]
+    __str__ = cls2str
 
 class s_xl_daio_piggy_data(ctypes.Structure):
     _anonymous_ = ("data",)
@@ -837,6 +882,7 @@ class s_xl_daio_piggy_data(ctypes.Structure):
         ("triggerType", ctypes.c_uint),
         ("data", u_xl_digital_analogue),
     ]
+    __str__ = cls2str
 
 class XL_CHIPSTAT(enum.IntEnum):
     BUSOFF = 1
@@ -850,6 +896,7 @@ class s_xl_chip_state(ctypes.Structure):
         ("txErrorCounter", ctypes.c_ubyte),
         ("rxErrorCounter", ctypes.c_ubyte),
     ]
+    __str__ = cls2str
 
 class XL_TRANSCEIVER_EVENT(enum.IntEnum):
     NONE = 0
@@ -865,6 +912,7 @@ class s_xl_transceiver(ctypes.Structure):
         ("event_reason", ctypes.c_ubyte),
         ("is_present", ctypes.c_ubyte),
     ]
+    __str__ = cls2str
 
 class XL_OUTPUT_MODE(enum.IntEnum):
     #switch CAN trx into default silent mode
@@ -888,16 +936,19 @@ class s_xl_lin_msg(ctypes.Structure):
         ("data", ctypes.c_ubyte*8),
         ("crc", ctypes.c_ubyte),
     ]
+    __str__ = cls2str
 
 class s_xl_lin_sleep(ctypes.Structure):
     _fields_ = [
         ("flag", ctypes.c_ubyte),
     ]
+    __str__ = cls2str
 
 class s_xl_lin_no_ans(ctypes.Structure):
     _fields_ = [
         ("id", ctypes.c_ubyte),
     ]
+    __str__ = cls2str
 
 class s_xl_lin_wake_up(ctypes.Structure):
     _fields_ = [
@@ -906,12 +957,14 @@ class s_xl_lin_wake_up(ctypes.Structure):
         ("startOffs", ctypes.c_uint),
         ("width", ctypes.c_uint),
     ]
+    __str__ = cls2str
 
 class s_xl_lin_crc_info(ctypes.Structure):
     _fields_ = [
         ("id", ctypes.c_ubyte),
         ("flags", ctypes.c_ubyte),
     ]
+    __str__ = cls2str
 
 #LIN messages structure
 class s_xl_lin_msg_api(ctypes.Union):
@@ -922,6 +975,7 @@ class s_xl_lin_msg_api(ctypes.Union):
         ("linSleep", s_xl_lin_sleep),
         ("linCRCinfo", s_xl_lin_crc_info),
     ]
+    __str__ = cls2str
 
 # K-Line messages structure
 class s_xl_kline_rx_data(ctypes.Structure):
@@ -930,6 +984,7 @@ class s_xl_kline_rx_data(ctypes.Structure):
         ("data", ctypes.c_uint),
         ("error", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_KLINE_RX_DATA = s_xl_kline_rx_data
 
 class s_xl_kline_tx_data(ctypes.Structure):
@@ -938,6 +993,7 @@ class s_xl_kline_tx_data(ctypes.Structure):
         ("data", ctypes.c_uint),
         ("error", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_KLINE_TX_DATA = s_xl_kline_tx_data
 
 class s_xl_kline_tester_5bd(ctypes.Structure):
@@ -946,6 +1002,7 @@ class s_xl_kline_tester_5bd(ctypes.Structure):
         ("timeDiff", ctypes.c_uint),
         ("data", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_KLINE_TESTER_5BD = s_xl_kline_tester_5bd
 
 class s_xl_kline_ecu_5bd(ctypes.Structure):
@@ -954,6 +1011,7 @@ class s_xl_kline_ecu_5bd(ctypes.Structure):
         ("timeDiff", ctypes.c_uint),
         ("data", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_KLINE_ECU_5BD = s_xl_kline_ecu_5bd
 
 class s_xl_kline_tester_fastinit_wu_pattern(ctypes.Structure):
@@ -961,6 +1019,7 @@ class s_xl_kline_tester_fastinit_wu_pattern(ctypes.Structure):
         ("timeDiff", ctypes.c_uint),
         ("fastInitEdgeTimeDiff", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_KLINE_TESTER_FI_WU_PATTERN = s_xl_kline_tester_fastinit_wu_pattern
 
 class s_xl_kline_ecu_fastinit_wu_pattern(ctypes.Structure):
@@ -968,6 +1027,7 @@ class s_xl_kline_ecu_fastinit_wu_pattern(ctypes.Structure):
         ("timeDiff", ctypes.c_uint),
         ("fastInitEdgeTimeDiff", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_KLINE_ECU_FI_WU_PATTERN = s_xl_kline_ecu_fastinit_wu_pattern
 
 class s_xl_kline_confirmation(ctypes.Structure):
@@ -976,24 +1036,28 @@ class s_xl_kline_confirmation(ctypes.Structure):
         ("confTag", ctypes.c_uint),
         ("result", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_KLINE_CONFIRMATION = s_xl_kline_confirmation
 
 class s_xl_kline_error_rxtx(ctypes.Structure):
     _fields_ = [
         ("rxtxErrData", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_KLINE_ERROR_RXTX = s_xl_kline_error_rxtx
 
 class s_xl_kline_error_5bd_tester(ctypes.Structure):
     _fields_ = [
         ("tester5BdErr", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_KLINE_ERROR_TESTER_5BD = s_xl_kline_error_5bd_tester
 
 class s_xl_kline_error_5bd_ecu(ctypes.Structure):
     _fields_ = [
         ("ecu5BdErr", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_KLINE_ERROR_ECU_5BD = s_xl_kline_error_5bd_ecu
 
 class s_xl_kline_error_ibs(ctypes.Structure):
@@ -1001,6 +1065,7 @@ class s_xl_kline_error_ibs(ctypes.Structure):
         ("ibsErr", ctypes.c_uint),
         ("rxtxErrData", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_KLINE_ERROR_IBS = s_xl_kline_error_ibs
 
 class u_xl_kline_error(ctypes.Union):
@@ -1011,6 +1076,7 @@ class u_xl_kline_error(ctypes.Union):
         ("ibsErr", XL_KLINE_ERROR_IBS),
         ("reserved", ctypes.c_uint*4),
     ]
+    __str__ = cls2str
 
 class s_xl_kline_error(ctypes.Structure):
     _anonymous_ = ("data",)
@@ -1019,6 +1085,7 @@ class s_xl_kline_error(ctypes.Structure):
         ("reserved", ctypes.c_uint),
         ("data", u_xl_kline_error),
     ]
+    __str__ = cls2str
 XL_KLINE_ERROR = s_xl_kline_error
 
 class u_xl_kline_data(ctypes.Union):
@@ -1032,6 +1099,7 @@ class u_xl_kline_data(ctypes.Union):
         ("klineConfirmation", XL_KLINE_CONFIRMATION),
         ("klineError", XL_KLINE_ERROR),
     ]
+    __str__ = cls2str
 
 class s_xl_kline_data(ctypes.Structure):
     _anonymous_ = ("data",)
@@ -1040,6 +1108,7 @@ class s_xl_kline_data(ctypes.Structure):
         ("reserved", ctypes.c_uint),
         ("data", u_xl_kline_data),
     ]
+    __str__ = cls2str
 XL_KLINE_DATA = s_xl_kline_data
 
 #BASIC bus message structure
@@ -1055,6 +1124,7 @@ class s_xl_tag_data(ctypes.Union):
         ("daioPiggyData", s_xl_daio_piggy_data),
         ("klineData", s_xl_kline_data),
     ]
+    __str__ = cls2str
 
 XLeventTag = ctypes.c_ubyte
 #XL_EVENT structures - event type definition
@@ -1070,6 +1140,7 @@ class s_xl_event(ctypes.Structure):
         ("timeStamp", XLuint64),
         ("tagData", s_xl_tag_data),
     ]
+    __str__ = cls2str
 XLevent = s_xl_event
 
 #message name to acquire a unique message id from windows
@@ -1193,6 +1264,7 @@ class s_xl_canfd_conf(ctypes.Structure):
         #has to be zero
         ("reserved2", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XLcanFdConf = s_xl_canfd_conf
 
 class s_xl_chip_params(ctypes.Structure):
@@ -1204,6 +1276,7 @@ class s_xl_chip_params(ctypes.Structure):
         #1 or 3
         ("sam", ctypes.c_ubyte),
     ]
+    __str__ = cls2str
 XLchipParams = s_xl_chip_params
 
 class XL_BUS_PARAMS_MOST_SPEED(enum.IntEnum):
@@ -1229,6 +1302,7 @@ class s_xl_bus_params_can(ctypes.Structure):
         ("reserved1", ctypes.c_ubyte*7),
         ("canOpMode", ctypes.c_ubyte),
     ]
+    __str__ = cls2str
 
 class s_xl_bus_params_canFD(ctypes.Structure):
     _fields_ = [
@@ -1246,6 +1320,7 @@ class s_xl_bus_params_canFD(ctypes.Structure):
         ("dataBitRate", ctypes.c_uint),
         ("canOpMode", ctypes.c_ubyte),
     ]
+    __str__ = cls2str
 
 class s_xl_bus_params_most(ctypes.Structure):
     _fields_ = [
@@ -1253,6 +1328,7 @@ class s_xl_bus_params_most(ctypes.Structure):
         ("compatibleSpeedGrade", ctypes.c_uint),
         ("inicFwVersion", ctypes.c_uint),
     ]
+    __str__ = cls2str
 
 class s_xl_bus_params_flexray(ctypes.Structure):
     _fields_ = [
@@ -1263,6 +1339,7 @@ class s_xl_bus_params_flexray(ctypes.Structure):
         #FlexRay baudrate in kBaud
         ("baudrate", ctypes.c_uint),
     ]
+    __str__ = cls2str
 
 class s_xl_bus_params_ethernet(ctypes.Structure):
     _fields_ = [
@@ -1281,6 +1358,7 @@ class s_xl_bus_params_ethernet(ctypes.Structure):
         #XL_ETH_BYPASS_xxx
         ("bypass", ctypes.c_ubyte),
     ]
+    __str__ = cls2str
 
 class s_xl_a429_params_tx(ctypes.Structure):
     _fields_ = [
@@ -1288,6 +1366,7 @@ class s_xl_a429_params_tx(ctypes.Structure):
         ("parity", ctypes.c_uint),
         ("minGap", ctypes.c_uint),
     ]
+    __str__ = cls2str
 
 class s_xl_a429_params_rx(ctypes.Structure):
     _fields_ = [
@@ -1298,6 +1377,7 @@ class s_xl_a429_params_rx(ctypes.Structure):
         ("minGap", ctypes.c_uint),
         ("autoBaudrate", ctypes.c_uint),
     ]
+    __str__ = cls2str
 
 class u_xl_a429_params(ctypes.Union):
     _fields_ = [
@@ -1305,6 +1385,7 @@ class u_xl_a429_params(ctypes.Union):
         ("rx", s_xl_a429_params_rx),
         ("raw", ctypes.c_ubyte*24),
     ]
+    __str__ = cls2str
 
 class s_xl_bus_params_a429(ctypes.Structure):
     _anonymous_ = ("dir",)
@@ -1313,6 +1394,7 @@ class s_xl_bus_params_a429(ctypes.Structure):
         ("res1", ctypes.c_ushort),
         ("dir", u_xl_a429_params),
     ]
+    __str__ = cls2str
 
 class u_xl_bus_params(ctypes.Union):
     _fields_ = [
@@ -1324,6 +1406,7 @@ class u_xl_bus_params(ctypes.Union):
         ("a429", s_xl_bus_params_a429),
         ("raw", ctypes.c_ubyte*28),
     ]
+    __str__ = cls2str
 
 class s_xl_bus_params(ctypes.Structure):
     _anonymous_ = ("data",)
@@ -1331,6 +1414,7 @@ class s_xl_bus_params(ctypes.Structure):
         ("busType", ctypes.c_uint),
         ("data", u_xl_bus_params),
     ]
+    __str__ = cls2str
 XLbusParams = s_xl_bus_params
 
 XL_INVALID_PORTHANDLE = -1
@@ -1363,6 +1447,7 @@ class s_xl_license_info(ctypes.Structure):
         ("bAvailable", ctypes.c_ubyte),
         ("licName", ctypes.c_char*65),
     ]
+    __str__ = cls2str
 XL_LICENSE_INFO = s_xl_license_info
 XLlicenseInfo = XL_LICENSE_INFO
 
@@ -1408,6 +1493,7 @@ class s_xl_channel_config(ctypes.Structure):
         ("delimiterOffset", ctypes.c_ushort),
         ("reserved", ctypes.c_uint*3),
     ]
+    __str__ = cls2str
 XL_CHANNEL_CONFIG = s_xl_channel_config
 XLchannelConfig, pXLchannelConfig = XL_CHANNEL_CONFIG, ctypes.POINTER(XL_CHANNEL_CONFIG)
 
@@ -1418,6 +1504,7 @@ class s_xl_driver_config(ctypes.Structure):
         ("reserved", ctypes.c_uint*10),
         ("channel", XLchannelConfig*XL_CONFIG_MAX_CHANNELS),
     ]
+    __str__ = cls2str
 XL_DRIVER_CONFIG = s_xl_driver_config
 XLdriverConfig, pXLdriverConfig = XL_DRIVER_CONFIG, ctypes.POINTER(XL_DRIVER_CONFIG)
 
@@ -1464,6 +1551,7 @@ class s_xl_acc_filter(ctypes.Structure):
         #relevant = 1
         ("mask", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XLaccFilt = s_xl_acc_filter
 
 class s_xl_acceptance(ctypes.Structure):
@@ -1471,6 +1559,7 @@ class s_xl_acceptance(ctypes.Structure):
         ("std", XLaccFilt),
         ("xtd", XLaccFilt),
     ]
+    __str__ = cls2str
 XLacceptance = s_xl_acceptance
 
 class XL_SET_TIMESYNC(enum.IntEnum):
@@ -1546,6 +1635,7 @@ class u_xl_ip(ctypes.Union):
         ("v4", ctypes.c_uint),
         ("v6", ctypes.c_uint*4),
     ]
+    __str__ = cls2str
 
 class s_xl_ip_address(ctypes.Structure):
     _anonymous_ = ("ip",)
@@ -1556,6 +1646,7 @@ class s_xl_ip_address(ctypes.Structure):
         ("configPort", ctypes.c_uint),
         ("eventPort", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XLipAddress = s_xl_ip_address
 
 class s_xl_remote_location_config(ctypes.Structure):
@@ -1569,6 +1660,7 @@ class s_xl_remote_location_config(ctypes.Structure):
         ("articleNumber", ctypes.c_uint),
         ("remoteHandle", XLremoteHandle),
     ]
+    __str__ = cls2str
 XLremoteLocationConfig = s_xl_remote_location_config
 
 class s_xl_remote_device(ctypes.Structure):
@@ -1579,6 +1671,7 @@ class s_xl_remote_device(ctypes.Structure):
         ("serialNumber", ctypes.c_uint),
         ("reserved", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XLremoteDevice = s_xl_remote_device
 
 class s_xl_remote_device_info(ctypes.Structure):
@@ -1589,6 +1682,7 @@ class s_xl_remote_device_info(ctypes.Structure):
         ("nbrOfDevices", ctypes.c_uint),
         ("deviceInfo", XLremoteDevice*XL_MAX_REMOTE_DEVICE_INFO),
     ]
+    __str__ = cls2str
 XLremoteDeviceInfo = s_xl_remote_device_info
 
 XL_CHANNEL_FLAG_EX_MASK = lambda n: 1 << n
@@ -1932,6 +2026,7 @@ class s_xl_most_ctrl_spy(ctypes.Structure):
         ("ctrlRes", ctypes.c_ushort),
         ("spyRxStatus", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST_CTRL_SPY_EV = s_xl_most_ctrl_spy
 
 class s_xl_most_ctrl_msg(ctypes.Structure):
@@ -1946,6 +2041,7 @@ class s_xl_most_ctrl_msg(ctypes.Structure):
         #unused for real rx msgs
         ("status", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST_CTRL_MSG_EV = s_xl_most_ctrl_msg
 XLmostCtrlMsg = XL_MOST_CTRL_MSG_EV
 
@@ -1963,6 +2059,7 @@ class s_xl_most_async_msg(ctypes.Structure):
         #max size but only used data is transmitted to pc
         ("asyncData", ctypes.c_ubyte*1018),
     ]
+    __str__ = cls2str
 XL_MOST_ASYNC_MSG_EV = s_xl_most_async_msg
 
 class s_xl_most_async_tx(ctypes.Structure):
@@ -1975,6 +2072,7 @@ class s_xl_most_async_tx(ctypes.Structure):
         #worst case
         ("asyncData", ctypes.c_ubyte*1014),
     ]
+    __str__ = cls2str
 XL_MOST_ASYNC_TX_EV = s_xl_most_async_tx
 XLmostAsyncMsg = XL_MOST_ASYNC_TX_EV
 
@@ -1996,6 +2094,7 @@ class s_xl_most_special_register(ctypes.Structure):
         ("register_bXTIM", ctypes.c_ubyte),
         ("register_bXRTY", ctypes.c_ubyte),
     ]
+    __str__ = cls2str
 XL_MOST_SPECIAL_REGISTER_EV = s_xl_most_special_register
 
 class s_xl_most_event_source(ctypes.Structure):
@@ -2003,30 +2102,35 @@ class s_xl_most_event_source(ctypes.Structure):
         ("mask", ctypes.c_uint),
         ("state", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST_EVENT_SOURCE_EV = s_xl_most_event_source
 
 class s_xl_most_all_bypass(ctypes.Structure):
     _fields_ = [
         ("bypassState", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST_ALL_BYPASS_EV = s_xl_most_all_bypass
 
 class s_xl_most_timing_mode(ctypes.Structure):
     _fields_ = [
         ("timingmode", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST_TIMING_MODE_EV = s_xl_most_timing_mode
 
 class s_xl_most_timing_mode_spdif(ctypes.Structure):
     _fields_ = [
         ("timingmode", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST_TIMING_MODE_SPDIF_EV = s_xl_most_timing_mode_spdif
 
 class s_xl_most_frequency(ctypes.Structure):
     _fields_ = [
         ("frequency", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST_FREQUENCY_EV = s_xl_most_frequency
 
 class s_xl_most_register_bytes(ctypes.Structure):
@@ -2035,6 +2139,7 @@ class s_xl_most_register_bytes(ctypes.Structure):
         ("address", ctypes.c_uint),
         ("value", ctypes.c_ubyte*16),
     ]
+    __str__ = cls2str
 XL_MOST_REGISTER_BYTES_EV = s_xl_most_register_bytes
 
 class s_xl_most_register_bits(ctypes.Structure):
@@ -2043,12 +2148,14 @@ class s_xl_most_register_bits(ctypes.Structure):
         ("value", ctypes.c_uint),
         ("mask", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST_REGISTER_BITS_EV = s_xl_most_register_bits
 
 class s_xl_most_sync_alloc(ctypes.Structure):
     _fields_ = [
         ("allocTable", ctypes.c_ubyte*MOST_ALLOC_TABLE_SIZE),
     ]
+    __str__ = cls2str
 XL_MOST_SYNC_ALLOC_EV = s_xl_most_sync_alloc
 
 class s_xl_most_ctrl_sync_audio(ctypes.Structure):
@@ -2057,6 +2164,7 @@ class s_xl_most_ctrl_sync_audio(ctypes.Structure):
         ("device", ctypes.c_uint),
         ("mode", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST_CTRL_SYNC_AUDIO_EV = s_xl_most_ctrl_sync_audio
 
 class s_xl_most_ctrl_sync_audio_ex(ctypes.Structure):
@@ -2065,6 +2173,7 @@ class s_xl_most_ctrl_sync_audio_ex(ctypes.Structure):
         ("device", ctypes.c_uint),
         ("mode", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST_CTRL_SYNC_AUDIO_EX_EV = s_xl_most_ctrl_sync_audio_ex
 
 class s_xl_most_sync_volume_status(ctypes.Structure):
@@ -2072,6 +2181,7 @@ class s_xl_most_sync_volume_status(ctypes.Structure):
         ("device", ctypes.c_uint),
         ("volume", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST_SYNC_VOLUME_STATUS_EV = s_xl_most_sync_volume_status
 
 class s_xl_most_sync_mutes_status(ctypes.Structure):
@@ -2079,36 +2189,42 @@ class s_xl_most_sync_mutes_status(ctypes.Structure):
         ("device", ctypes.c_uint),
         ("mute", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST_SYNC_MUTES_STATUS_EV = s_xl_most_sync_mutes_status
 
 class s_xl_most_rx_light(ctypes.Structure):
     _fields_ = [
         ("light", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST_RX_LIGHT_EV = s_xl_most_rx_light
 
 class s_xl_most_tx_light(ctypes.Structure):
     _fields_ = [
         ("light", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST_TX_LIGHT_EV = s_xl_most_tx_light
 
 class s_xl_most_light_power(ctypes.Structure):
     _fields_ = [
         ("lightPower", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST_LIGHT_POWER_EV = s_xl_most_light_power
 
 class s_xl_most_lock_status(ctypes.Structure):
     _fields_ = [
         ("lockStatus", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST_LOCK_STATUS_EV = s_xl_most_lock_status
 
 class s_xl_most_supervisor_lock_status(ctypes.Structure):
     _fields_ = [
         ("supervisorLockStatus", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST_SUPERVISOR_LOCK_STATUS_EV = s_xl_most_supervisor_lock_status
 
 class s_xl_most_gen_light_error(ctypes.Structure):
@@ -2117,6 +2233,7 @@ class s_xl_most_gen_light_error(ctypes.Structure):
         ("lightOffTime", ctypes.c_uint),
         ("repeat", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST_GEN_LIGHT_ERROR_EV = s_xl_most_gen_light_error
 
 class s_xl_most_gen_lock_error(ctypes.Structure):
@@ -2125,12 +2242,14 @@ class s_xl_most_gen_lock_error(ctypes.Structure):
         ("lockOffTime", ctypes.c_uint),
         ("repeat", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST_GEN_LOCK_ERROR_EV = s_xl_most_gen_lock_error
 
 class s_xl_most_rx_buffer(ctypes.Structure):
     _fields_ = [
         ("mode", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST_RX_BUFFER_EV = s_xl_most_rx_buffer
 
 class s_xl_most_error(ctypes.Structure):
@@ -2138,18 +2257,21 @@ class s_xl_most_error(ctypes.Structure):
         ("errorCode", ctypes.c_uint),
         ("parameter", ctypes.c_uint*3),
     ]
+    __str__ = cls2str
 XL_MOST_ERROR_EV = s_xl_most_error
 
 class s_xl_most_ctrl_busload(ctypes.Structure):
     _fields_ = [
         ("busloadCtrlStarted", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST_CTRL_BUSLOAD_EV = s_xl_most_ctrl_busload
 
 class s_xl_most_async_busload(ctypes.Structure):
     _fields_ = [
         ("busloadAsyncStarted", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST_ASYNC_BUSLOAD_EV = s_xl_most_async_busload
 
 class s_xl_most_stream_state(ctypes.Structure):
@@ -2161,6 +2283,7 @@ class s_xl_most_stream_state(ctypes.Structure):
         ("streamError", ctypes.c_uint),
         ("reserved", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST_STREAM_STATE_EV = s_xl_most_stream_state
 
 class s_xl_most_stream_buffer(ctypes.Structure):
@@ -2177,6 +2300,7 @@ class s_xl_most_stream_buffer(ctypes.Structure):
         ("status", ctypes.c_uint),
         ("pBuffer_highpart", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST_STREAM_BUFFER_EV = s_xl_most_stream_buffer
 
 class s_xl_most_sync_tx_underflow(ctypes.Structure):
@@ -2184,6 +2308,7 @@ class s_xl_most_sync_tx_underflow(ctypes.Structure):
         ("streamHandle", ctypes.c_uint),
         ("reserved", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST_SYNC_TX_UNDERFLOW_EV = s_xl_most_sync_tx_underflow
 
 class s_xl_most_sync_rx_overflow(ctypes.Structure):
@@ -2191,6 +2316,7 @@ class s_xl_most_sync_rx_overflow(ctypes.Structure):
         ("streamHandle", ctypes.c_uint),
         ("reserved", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST_SYNC_RX_OVERFLOW_EV = s_xl_most_sync_rx_overflow
 
 XL_MOST_EVENT_HEADER_SIZE = 32
@@ -2264,6 +2390,7 @@ class s_xl_most_tag_data(ctypes.Union):
         #XL_MOST_SYNC_RX_OVERFLOW_EV
         ("mostSyncRxOverflow", s_xl_most_sync_rx_overflow),
     ]
+    __str__ = cls2str
 
 XLmostEventTag = ctypes.c_ushort
 
@@ -2280,6 +2407,7 @@ class s_xl_most_event(ctypes.Structure):
         ("timeStampSync", XLuint64),
         ("tagData", s_xl_most_tag_data),
     ]
+    __str__ = cls2str
 XLmostEvent = s_xl_most_event
 
 class s_xl_most_ctrl_busload_configuration(ctypes.Structure):
@@ -2289,6 +2417,7 @@ class s_xl_most_ctrl_busload_configuration(ctypes.Structure):
         ("counterPosition", ctypes.c_uint),
         ("busloadCtrlMsg", XL_MOST_CTRL_MSG_EV),
     ]
+    __str__ = cls2str
 XL_MOST_CTRL_BUSLOAD_CONFIGURATION = s_xl_most_ctrl_busload_configuration
 XLmostCtrlBusloadConfiguration = XL_MOST_CTRL_BUSLOAD_CONFIGURATION
 
@@ -2299,6 +2428,7 @@ class s_xl_most_async_busload_configuration(ctypes.Structure):
         ("counterPosition", ctypes.c_uint),
         ("busloadAsyncMsg", XL_MOST_ASYNC_TX_EV),
     ]
+    __str__ = cls2str
 XL_MOST_ASYNC_BUSLOAD_CONFIGURATION = s_xl_most_async_busload_configuration
 XLmostAsyncBusloadConfiguration = XL_MOST_ASYNC_BUSLOAD_CONFIGURATION
 
@@ -2362,6 +2492,7 @@ class s_xl_most_device_state(ctypes.Structure):
         ("adrNetworkMaster", ctypes.c_uint),
         ("abilityToWake", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST_DEVICE_STATE = s_xl_most_device_state
 
 class s_xl_most_stream_open(ctypes.Structure):
@@ -2372,6 +2503,7 @@ class s_xl_most_stream_open(ctypes.Structure):
         ("options", ctypes.c_uint),
         ("latency", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST_STREAM_OPEN = s_xl_most_stream_open
 XLmostStreamOpen = XL_MOST_STREAM_OPEN
 
@@ -2386,6 +2518,7 @@ class s_xl_most_stream_info(ctypes.Structure):
         ("reserved", ctypes.c_uint),
         ("syncChannels", ctypes.c_ubyte*60),
     ]
+    __str__ = cls2str
 XL_MOST_STREAM_INFO = s_xl_most_stream_info
 XLmostStreamInfo = XL_MOST_STREAM_INFO
 
@@ -2462,6 +2595,7 @@ class s_xl_fr_cluster_configuration(ctypes.Structure):
         ("framePresetData", ctypes.c_uint),
         ("reserved", ctypes.c_uint*15),
     ]
+    __str__ = cls2str
 XLfrClusterConfig = s_xl_fr_cluster_configuration
 
 class s_xl_fr_channel_config(ctypes.Structure):
@@ -2474,6 +2608,7 @@ class s_xl_fr_channel_config(ctypes.Structure):
         #same as used in function xlFrSetConfig
         ("xlFrClusterConfig", s_xl_fr_cluster_configuration),
     ]
+    __str__ = cls2str
 XLfrChannelConfig = s_xl_fr_channel_config
 
 class XL_FR_CHANNEL_CFG_STATUS(enum.IntFlag):
@@ -2513,6 +2648,7 @@ class s_xl_fr_set_modes(ctypes.Structure):
         ("frStartupAttributes", ctypes.c_uint),
         ("reserved", ctypes.c_uint*30),
     ]
+    __str__ = cls2str
 XLfrMode = s_xl_fr_set_modes
 
 class XL_FR_SYMBOL(enum.IntEnum):
@@ -2567,6 +2703,7 @@ class s_xl_fr_acceptance_filter(ctypes.Structure):
         #channel A, B for PC, channel A, B for COB
         ("filterChannelMask", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XLfrAcceptanceFilter = s_xl_fr_acceptance_filter
 
 class XL_FR_FLAGS_CHIP(enum.IntFlag):
@@ -2772,6 +2909,7 @@ class s_xl_fr_start_cycle(ctypes.Structure):
         ("vAllowPassivToActive", ctypes.c_uint),
         ("reserved", ctypes.c_uint*3),
     ]
+    __str__ = cls2str
 XL_FR_START_CYCLE_EV = s_xl_fr_start_cycle
 
 class s_xl_fr_rx_frame(ctypes.Structure):
@@ -2783,6 +2921,7 @@ class s_xl_fr_rx_frame(ctypes.Structure):
         ("payloadLength", ctypes.c_ubyte),
         ("data", ctypes.c_ubyte*XL_FR_MAX_DATA_LENGTH),
     ]
+    __str__ = cls2str
 XL_FR_RX_FRAME_EV = s_xl_fr_rx_frame
 
 class s_xl_fr_tx_frame(ctypes.Structure):
@@ -2799,6 +2938,7 @@ class s_xl_fr_tx_frame(ctypes.Structure):
         ("reserved1", ctypes.c_ubyte),
         ("data", ctypes.c_ubyte*XL_FR_MAX_DATA_LENGTH),
     ]
+    __str__ = cls2str
 XL_FR_TX_FRAME_EV = s_xl_fr_tx_frame
 
 class s_xl_fr_wakeup(ctypes.Structure):
@@ -2809,6 +2949,7 @@ class s_xl_fr_wakeup(ctypes.Structure):
         ("wakeupStatus", ctypes.c_ubyte),
         ("reserved", ctypes.c_ubyte*6),
     ]
+    __str__ = cls2str
 XL_FR_WAKEUP_EV = s_xl_fr_wakeup
 
 class s_xl_fr_symbol_window(ctypes.Structure):
@@ -2821,6 +2962,7 @@ class s_xl_fr_symbol_window(ctypes.Structure):
         ("cycleCount", ctypes.c_ubyte),
         ("reserved", ctypes.c_ubyte*7),
     ]
+    __str__ = cls2str
 XL_FR_SYMBOL_WINDOW_EV = s_xl_fr_symbol_window
 
 class s_xl_fr_status(ctypes.Structure):
@@ -2829,6 +2971,7 @@ class s_xl_fr_status(ctypes.Structure):
         ("statusType", ctypes.c_uint),
         ("reserved", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_FR_STATUS_EV = s_xl_fr_status
 
 class s_xl_fr_nm_vector(ctypes.Structure):
@@ -2838,6 +2981,7 @@ class s_xl_fr_nm_vector(ctypes.Structure):
         ("cycleCount", ctypes.c_ubyte),
         ("reserved", ctypes.c_ubyte*3),
     ]
+    __str__ = cls2str
 XL_FR_NM_VECTOR_EV = s_xl_fr_nm_vector
 
 class s_xl_fr_error_poc_mode(ctypes.Structure):
@@ -2846,6 +2990,7 @@ class s_xl_fr_error_poc_mode(ctypes.Structure):
         ("errorMode", ctypes.c_ubyte),
         ("reserved", ctypes.c_ubyte*3),
     ]
+    __str__ = cls2str
 XL_FR_ERROR_POC_MODE_EV = s_xl_fr_error_poc_mode
 
 class s_xl_fr_error_sync_frames(ctypes.Structure):
@@ -2860,6 +3005,7 @@ class s_xl_fr_error_sync_frames(ctypes.Structure):
         ("oddSyncFramesB", ctypes.c_ushort),
         ("reserved", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_FR_ERROR_SYNC_FRAMES_EV = s_xl_fr_error_sync_frames
 
 class s_xl_fr_error_clock_corr_failure(ctypes.Structure):
@@ -2878,6 +3024,7 @@ class s_xl_fr_error_clock_corr_failure(ctypes.Structure):
         ("clockCorrFailedCounter", ctypes.c_uint),
         ("reserved", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_FR_ERROR_CLOCK_CORR_FAILURE_EV = s_xl_fr_error_clock_corr_failure
 
 class s_xl_fr_error_nit_failure(ctypes.Structure):
@@ -2886,6 +3033,7 @@ class s_xl_fr_error_nit_failure(ctypes.Structure):
         ("flags", ctypes.c_uint),
         ("reserved", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_FR_ERROR_NIT_FAILURE_EV = s_xl_fr_error_nit_failure
 
 class s_xl_fr_error_cc_error(ctypes.Structure):
@@ -2894,6 +3042,7 @@ class s_xl_fr_error_cc_error(ctypes.Structure):
         ("ccError", ctypes.c_uint),
         ("reserved", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_FR_ERROR_CC_ERROR_EV = s_xl_fr_error_cc_error
 
 class s_xl_fr_error_info(ctypes.Union):
@@ -2911,6 +3060,7 @@ class s_xl_fr_error_info(ctypes.Union):
         #internal CC error flags (E-RAY: EIR)
         ("frCCError", s_xl_fr_error_cc_error),
     ]
+    __str__ = cls2str
 
 class s_xl_fr_error(ctypes.Structure):
     _fields_ = [
@@ -2919,6 +3069,7 @@ class s_xl_fr_error(ctypes.Structure):
         ("reserved", ctypes.c_ubyte*6),
         ("errorInfo", s_xl_fr_error_info),
     ]
+    __str__ = cls2str
 XL_FR_ERROR_EV = s_xl_fr_error
 
 class s_xl_fr_spy_frame(ctypes.Structure):
@@ -2937,6 +3088,7 @@ class s_xl_fr_spy_frame(ctypes.Structure):
         ("frameCRC", ctypes.c_uint),
         ("data", ctypes.c_ubyte*XL_FR_MAX_DATA_LENGTH),
     ]
+    __str__ = cls2str
 XL_FR_SPY_FRAME_EV = s_xl_fr_spy_frame
 
 class s_xl_fr_spy_symbol(ctypes.Structure):
@@ -2944,6 +3096,7 @@ class s_xl_fr_spy_symbol(ctypes.Structure):
         ("lowLength", ctypes.c_ushort),
         ("reserved", ctypes.c_ushort),
     ]
+    __str__ = cls2str
 XL_FR_SPY_SYMBOL_EV = s_xl_fr_spy_symbol
 
 class s_xl_fr_tag_data(ctypes.Union):
@@ -2973,6 +3126,7 @@ class s_xl_fr_tag_data(ctypes.Union):
         #XL_APPLICATION_NOTIFICATION_EV
         ("applicationNotification", s_xl_application_notification),
     ]
+    __str__ = cls2str
 
 XLfrEventTag = ctypes.c_ushort
 
@@ -2994,6 +3148,7 @@ class s_xl_fr_event(ctypes.Structure):
         ("timeStampSync", XLuint64),
         ("tagData", s_xl_fr_tag_data),
     ]
+    __str__ = cls2str
 XLfrEvent = s_xl_fr_event
 
 ### IO XL API ###
@@ -3012,6 +3167,7 @@ class s_xl_daio_trigger_type_params_digital(ctypes.Structure):
         # Use defines XL_DAIO_TRIGGER_TYPE_xxx(RISIONG|FALLING|BOTH)
         ("type", ctypes.c_uint),
     ]
+    __str__ = cls2str
 
 class u_xl_trigger_type_params(ctypes.Union):
     _fields_ = [
@@ -3019,6 +3175,7 @@ class u_xl_trigger_type_params(ctypes.Union):
         ("cycleTime", ctypes.c_uint),
         ("digital", s_xl_daio_trigger_type_params_digital),
     ]
+    __str__ = cls2str
 
 class s_xl_daio_trigger_mode(ctypes.Structure):
     _anonymous_ = ("param",)
@@ -3029,6 +3186,7 @@ class s_xl_daio_trigger_mode(ctypes.Structure):
         ("triggerType", ctypes.c_uint),
         ("param", u_xl_trigger_type_params),
     ]
+    __str__ = cls2str
 XLdaioTriggerMode = s_xl_daio_trigger_mode
 
 class XL_DAIO_TRIGGER_TYPE(enum.IntEnum):
@@ -3047,6 +3205,7 @@ class xl_daio_set_port(ctypes.Structure):
         #Set this parameters to zero!
         ("reserved", ctypes.c_uint*8),
     ]
+    __str__ = cls2str
 XLdaioSetPort = xl_daio_set_port
 
 class XL_DAIO_PORT_DIGITAL(enum.IntEnum):
@@ -3076,6 +3235,7 @@ class xl_daio_digital_params(ctypes.Structure):
         #Specify the port value (ON/HIGH 1 | OFF/LOW - 0)
         ("valueMask", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XLdaioDigitalParams = xl_daio_digital_params
 
 class XL_DAIO_PORT_MASK_DIGITAL(enum.IntEnum):
@@ -3095,6 +3255,7 @@ class xl_daio_analog_params(ctypes.Structure):
         #12-bit values
         ("value", ctypes.c_uint*8),
     ]
+    __str__ = cls2str
 XLdaioAnalogParams = xl_daio_analog_params
 
 class XL_DAIO_PORT_MASK_ANALOG(enum.IntEnum):
@@ -3128,6 +3289,7 @@ class s_xl_kline_uart_params(ctypes.Structure):
         ("stopbits", ctypes.c_uint),
         ("parity", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XLklineUartParameter = s_xl_kline_uart_params
 
 class s_xl_kline_init_tester(ctypes.Structure):
@@ -3138,6 +3300,7 @@ class s_xl_kline_init_tester(ctypes.Structure):
         ("Twup", ctypes.c_uint),
         ("reserved", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XLklineInitTester = s_xl_kline_init_tester
 
 class s_xl_kline_init_5BdTester(ctypes.Structure):
@@ -3165,6 +3328,7 @@ class s_xl_kline_init_5BdTester(ctypes.Structure):
         ("kb2Not", ctypes.c_uint),
         ("reserved", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XLkline5BdTester = s_xl_kline_init_5BdTester
 
 class s_xl_kline_init_5BdEcu(ctypes.Structure):
@@ -3190,6 +3354,7 @@ class s_xl_kline_init_5BdEcu(ctypes.Structure):
         ("addrNot", ctypes.c_uint),
         ("reserved", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XLkline5BdEcu = s_xl_kline_init_5BdEcu
 
 class s_xl_kline_set_com_tester(ctypes.Structure):
@@ -3200,6 +3365,7 @@ class s_xl_kline_set_com_tester(ctypes.Structure):
         ("P4", ctypes.c_uint),
         ("reserved", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XLklineSetComTester = s_xl_kline_set_com_tester
 
 class s_xl_kline_set_com_ecu(ctypes.Structure):
@@ -3218,6 +3384,7 @@ class s_xl_kline_set_com_ecu(ctypes.Structure):
         ("TwupMax", ctypes.c_uint),
         ("reserved", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XLklineSetComEcu = s_xl_kline_set_com_ecu
 
 
@@ -3576,6 +3743,7 @@ class s_xl_eth_frame(ctypes.Structure):
         ("etherType", ctypes.c_ushort),
         ("payload", ctypes.c_ubyte*XL_ETH_PAYLOAD_SIZE_MAX),
     ]
+    __str__ = cls2str
 T_XL_ETH_FRAME = s_xl_eth_frame
 
 class s_xl_eth_framedata(ctypes.Union):
@@ -3583,6 +3751,7 @@ class s_xl_eth_framedata(ctypes.Union):
         ("rawData", ctypes.c_ubyte*XL_ETH_RAW_FRAME_SIZE_MAX),
         ("ethFrame", s_xl_eth_frame),
     ]
+    __str__ = cls2str
 T_XL_ETH_FRAMEDATA = s_xl_eth_framedata
 
 class s_xl_eth_dataframe_rx(ctypes.Structure):
@@ -3606,6 +3775,7 @@ class s_xl_eth_dataframe_rx(ctypes.Structure):
         ("sourceMAC", ctypes.c_ubyte*XL_ETH_MACADDR_OCTETS),
         ("frameData", s_xl_eth_framedata),
     ]
+    __str__ = cls2str
 T_XL_ETH_DATAFRAME_RX = s_xl_eth_dataframe_rx
 
 class s_xl_eth_dataframe_rxerror(ctypes.Structure):
@@ -3631,6 +3801,7 @@ class s_xl_eth_dataframe_rxerror(ctypes.Structure):
         ("sourceMAC", ctypes.c_ubyte*XL_ETH_MACADDR_OCTETS),
         ("frameData", s_xl_eth_framedata),
     ]
+    __str__ = cls2str
 T_XL_ETH_DATAFRAME_RX_ERROR = s_xl_eth_dataframe_rxerror
 
 class s_xl_eth_dataframe_tx(ctypes.Structure):
@@ -3652,6 +3823,7 @@ class s_xl_eth_dataframe_tx(ctypes.Structure):
         ("sourceMAC", ctypes.c_ubyte*XL_ETH_MACADDR_OCTETS),
         ("frameData", s_xl_eth_framedata),
     ]
+    __str__ = cls2str
 T_XL_ETH_DATAFRAME_TX = s_xl_eth_dataframe_tx
 
 class s_xl_eth_dataframe_tx_event(ctypes.Structure):
@@ -3677,6 +3849,7 @@ class s_xl_eth_dataframe_tx_event(ctypes.Structure):
         ("sourceMAC", ctypes.c_ubyte*XL_ETH_MACADDR_OCTETS),
         ("frameData", s_xl_eth_framedata),
     ]
+    __str__ = cls2str
 T_XL_ETH_DATAFRAME_TX_EVENT = s_xl_eth_dataframe_tx_event
 T_XL_ETH_DATAFRAME_TXACK = T_XL_ETH_DATAFRAME_TX_EVENT
 T_XL_ETH_DATAFRAME_TXACK_SW = T_XL_ETH_DATAFRAME_TX_EVENT
@@ -3687,6 +3860,7 @@ class s_xl_eth_dataframe_txerror(ctypes.Structure):
         ("errorType", ctypes.c_uint),
         ("txFrame", s_xl_eth_dataframe_tx_event),
     ]
+    __str__ = cls2str
 T_XL_ETH_DATAFRAME_TX_ERROR = s_xl_eth_dataframe_txerror
 T_XL_ETH_DATAFRAME_TX_ERR_SW = T_XL_ETH_DATAFRAME_TX_ERROR
 T_XL_ETH_DATAFRAME_TX_ERR_OTHERAPP = T_XL_ETH_DATAFRAME_TX_ERROR
@@ -3695,6 +3869,7 @@ class s_xl_eth_config_result(ctypes.Structure):
     _fields_ = [
         ("result", ctypes.c_uint),
     ]
+    __str__ = cls2str
 T_XL_ETH_CONFIG_RESULT = s_xl_eth_config_result
 
 class s_xl_eth_channel_status(ctypes.Structure):
@@ -3716,6 +3891,7 @@ class s_xl_eth_channel_status(ctypes.Structure):
         #(XL_ETH_STATUS_BR_PAIR_*)   When in BroadR-mode, number of used cable pairs
         ("brPairs", ctypes.c_uint),
     ]
+    __str__ = cls2str
 T_XL_ETH_CHANNEL_STATUS = s_xl_eth_channel_status
 
 class s_xl_eth_txAck(ctypes.Structure):
@@ -3729,6 +3905,7 @@ class s_xl_eth_txAck(ctypes.Structure):
         #currently reserved field - not used
         ("reserved", ctypes.c_ubyte*2),
     ]
+    __str__ = cls2str
 s_xl_eth_txAckSw = s_xl_eth_txAck
 
 class s_xl_eth_txError(ctypes.Structure):
@@ -3743,6 +3920,7 @@ class s_xl_eth_txError(ctypes.Structure):
         #currently reserved field - not used
         ("reserved", ctypes.c_ubyte*2),
     ]
+    __str__ = cls2str
 s_xl_eth_txErrorSw = s_xl_eth_txError
 
 class u_xl_eth_eventInfo(ctypes.Union):
@@ -3753,6 +3931,7 @@ class u_xl_eth_eventInfo(ctypes.Union):
         ("txError", s_xl_eth_txErrorSw),
         ("reserved", ctypes.c_uint*20),
     ]
+    __str__ = cls2str
 
 class s_xl_eth_lostevent(ctypes.Structure):
     _anonymous_ = ("eventInfo",)
@@ -3765,6 +3944,7 @@ class s_xl_eth_lostevent(ctypes.Structure):
         ("reason", ctypes.c_uint),
         ("eventInfo", u_xl_eth_eventInfo),
     ]
+    __str__ = cls2str
 T_XL_ETH_LOSTEVENT = s_xl_eth_lostevent
 
 class s_xl_eth_tag_data(ctypes.Union):
@@ -3792,6 +3972,7 @@ class s_xl_eth_tag_data(ctypes.Union):
         #(tag==XL_ETH_EVENT_TAG_LOSTEVENT) - Indication that one or more events have been lost
         ("lostEvent", s_xl_eth_lostevent),
     ]
+    __str__ = cls2str
 
 class s_xl_eth_event(ctypes.Structure):
     _anonymous_ = ("tagData",)
@@ -3809,6 +3990,7 @@ class s_xl_eth_event(ctypes.Structure):
         ("timeStampSync", XLuint64),
         ("tagData", s_xl_eth_tag_data),
     ]
+    __str__ = cls2str
 T_XL_ETH_EVENT = s_xl_eth_event
 
 class s_xl_net_eth_dataframe_rx(ctypes.Structure):
@@ -3834,6 +4016,7 @@ class s_xl_net_eth_dataframe_rx(ctypes.Structure):
         ("sourceMAC", ctypes.c_ubyte*XL_ETH_MACADDR_OCTETS),
         ("frameData", s_xl_eth_framedata),
     ]
+    __str__ = cls2str
 T_XL_NET_ETH_DATAFRAME_RX =s_xl_net_eth_dataframe_rx
 T_XL_NET_ETH_DATAFRAME_SIMULATION_TX_ACK = T_XL_NET_ETH_DATAFRAME_RX
 T_XL_NET_ETH_DATAFRAME_MEASUREMENT_RX = T_XL_NET_ETH_DATAFRAME_RX
@@ -3862,6 +4045,7 @@ class s_xl_net_eth_dataframe_rx_error(ctypes.Structure):
         ("sourceMAC", ctypes.c_ubyte*XL_ETH_MACADDR_OCTETS),
         ("frameData", s_xl_eth_framedata),
     ]
+    __str__ = cls2str
 T_XL_NET_ETH_DATAFRAME_RX_ERROR =s_xl_net_eth_dataframe_rx_error
 T_XL_NET_ETH_DATAFRAME_SIMULATION_TX_ERROR = T_XL_NET_ETH_DATAFRAME_RX_ERROR
 T_XL_NET_ETH_DATAFRAME_MEASUREMENT_RX_ERROR = T_XL_NET_ETH_DATAFRAME_RX_ERROR
@@ -3884,6 +4068,7 @@ class s_xl_eth_net_tag_data(ctypes.Union):
         ("frameMeasureTxError", s_xl_net_eth_dataframe_rx_error),
         ("channelStatus", s_xl_eth_channel_status),
     ]
+    __str__ = cls2str
 
 class s_xl_net_eth_event(ctypes.Structure):
     _anonymous_ = ("tagData",)
@@ -3906,6 +4091,7 @@ class s_xl_net_eth_event(ctypes.Structure):
         ("timeStampSync", XLuint64),
         ("tagData", s_xl_eth_net_tag_data),
     ]
+    __str__ = cls2str
 T_XL_NET_ETH_EVENT = s_xl_net_eth_event
 
 class s_xl_eth_config(ctypes.Structure):
@@ -3925,12 +4111,14 @@ class s_xl_eth_config(ctypes.Structure):
         #(XL_ETH_MODE_BR_PAIR_*)     Number of cable pairs to use (BroadR-REACH mode only).
         ("brPairs", ctypes.c_uint),
     ]
+    __str__ = cls2str
 T_XL_ETH_CONFIG = s_xl_eth_config
 
 class s_xl_eth_mac_address(ctypes.Structure):
     _fields_ = [
         ("address", ctypes.c_ubyte*XL_ETH_MACADDR_OCTETS),
     ]
+    __str__ = cls2str
 T_XL_ETH_MAC_ADDRESS = s_xl_eth_mac_address
 
 ### MOST150 XL API ###
@@ -4271,18 +4459,21 @@ class s_xl_most150_event_source(ctypes.Structure):
     _fields_ = [
         ("sourceMask", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST150_EVENT_SOURCE_EV = s_xl_most150_event_source
 
 class s_xl_most150_device_mode(ctypes.Structure):
     _fields_ = [
         ("deviceMode", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST150_DEVICE_MODE_EV = s_xl_most150_device_mode
 
 class s_xl_most150_frequency(ctypes.Structure):
     _fields_ = [
         ("frequency", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST150_FREQUENCY_EV = s_xl_most150_frequency
 
 class s_xl_most150_special_node_info(ctypes.Structure):
@@ -4305,6 +4496,7 @@ class s_xl_most150_special_node_info(ctypes.Structure):
         ("reserved1", ctypes.c_ubyte*3),
         ("reserved2", ctypes.c_uint*3),
     ]
+    __str__ = cls2str
 XL_MOST150_SPECIAL_NODE_INFO_EV = s_xl_most150_special_node_info
 
 class s_xl_most150_ctrl_rx(ctypes.Structure):
@@ -4319,6 +4511,7 @@ class s_xl_most150_ctrl_rx(ctypes.Structure):
         ("telLen", ctypes.c_ushort),
         ("ctrlData", ctypes.c_ubyte*45),
     ]
+    __str__ = cls2str
 XL_MOST150_CTRL_RX_EV = s_xl_most150_ctrl_rx
 
 class s_xl_most150_ctrl_spy(ctypes.Structure):
@@ -4345,6 +4538,7 @@ class s_xl_most150_ctrl_spy(ctypes.Structure):
         ("validMask", ctypes.c_uint),
         ("ctrlData", ctypes.c_ushort*51),
     ]
+    __str__ = cls2str
 XL_MOST150_CTRL_SPY_EV = s_xl_most150_ctrl_spy
 
 class s_xl_most150_async_rx_msg(ctypes.Structure):
@@ -4354,6 +4548,7 @@ class s_xl_most150_async_rx_msg(ctypes.Structure):
         ("sourceAddress", ctypes.c_ushort),
         ("asyncData", ctypes.c_ubyte*1524),
     ]
+    __str__ = cls2str
 XL_MOST150_ASYNC_RX_EV = s_xl_most150_async_rx_msg
 
 class s_xl_most150_async_spy_msg(ctypes.Structure):
@@ -4377,6 +4572,7 @@ class s_xl_most150_async_spy_msg(ctypes.Structure):
         ("validMask", ctypes.c_uint),
         ("asyncData", ctypes.c_ushort*1524),
     ]
+    __str__ = cls2str
 XL_MOST150_ASYNC_SPY_EV = s_xl_most150_async_spy_msg
 
 class s_xl_most150_ethernet_rx(ctypes.Structure):
@@ -4386,6 +4582,7 @@ class s_xl_most150_ethernet_rx(ctypes.Structure):
         ("length", ctypes.c_uint),
         ("ethernetData", ctypes.c_ubyte*1510),
     ]
+    __str__ = cls2str
 XL_MOST150_ETHERNET_RX_EV = s_xl_most150_ethernet_rx
 
 class s_xl_most150_ethernet_spy(ctypes.Structure):
@@ -4409,6 +4606,7 @@ class s_xl_most150_ethernet_spy(ctypes.Structure):
         ("validMask", ctypes.c_uint),
         ("ethernetData", ctypes.c_ushort*1506),
     ]
+    __str__ = cls2str
 XL_MOST150_ETHERNET_SPY_EV = s_xl_most150_ethernet_spy
 
 class s_xl_most150_cl_info(ctypes.Structure):
@@ -4416,12 +4614,14 @@ class s_xl_most150_cl_info(ctypes.Structure):
         ("label", ctypes.c_ushort),
         ("channelWidth", ctypes.c_ushort),
     ]
+    __str__ = cls2str
 XL_MOST150_CL_INFO = s_xl_most150_cl_info
 
 class s_xl_most150_sync_alloc_info(ctypes.Structure):
     _fields_ = [
         ("allocTable", s_xl_most150_cl_info*MOST150_SYNC_ALLOC_INFO_SIZE),
     ]
+    __str__ = cls2str
 XL_MOST150_SYNC_ALLOC_INFO_EV = s_xl_most150_sync_alloc_info
 
 class s_xl_most150_sync_volume_status(ctypes.Structure):
@@ -4429,18 +4629,21 @@ class s_xl_most150_sync_volume_status(ctypes.Structure):
         ("device", ctypes.c_uint),
         ("volume", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST150_SYNC_VOLUME_STATUS_EV = s_xl_most150_sync_volume_status
 
 class s_xl_most150_tx_light(ctypes.Structure):
     _fields_ = [
         ("light", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST150_TX_LIGHT_EV = s_xl_most150_tx_light
 
 class s_xl_most150_rx_light_lock_status(ctypes.Structure):
     _fields_ = [
         ("status", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST150_RXLIGHT_LOCKSTATUS_EV = s_xl_most150_rx_light_lock_status
 
 class s_xl_most150_error(ctypes.Structure):
@@ -4448,6 +4651,7 @@ class s_xl_most150_error(ctypes.Structure):
         ("errorCode", ctypes.c_uint),
         ("parameter", ctypes.c_uint*3),
     ]
+    __str__ = cls2str
 XL_MOST150_ERROR_EV = s_xl_most150_error
 
 class s_xl_most150_configure_rx_buffer(ctypes.Structure):
@@ -4455,6 +4659,7 @@ class s_xl_most150_configure_rx_buffer(ctypes.Structure):
         ("bufferType", ctypes.c_uint),
         ("bufferMode", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST150_CONFIGURE_RX_BUFFER_EV = s_xl_most150_configure_rx_buffer
 
 class s_xl_most150_ctrl_sync_audio(ctypes.Structure):
@@ -4464,6 +4669,7 @@ class s_xl_most150_ctrl_sync_audio(ctypes.Structure):
         ("device", ctypes.c_uint),
         ("mode", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST150_CTRL_SYNC_AUDIO_EV = s_xl_most150_ctrl_sync_audio
 
 class s_xl_most150_sync_mute_status(ctypes.Structure):
@@ -4471,48 +4677,56 @@ class s_xl_most150_sync_mute_status(ctypes.Structure):
         ("device", ctypes.c_uint),
         ("mute", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST150_SYNC_MUTE_STATUS_EV = s_xl_most150_sync_mute_status
 
 class s_xl_most150_tx_light_power(ctypes.Structure):
     _fields_ = [
         ("lightPower", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST150_LIGHT_POWER_EV = s_xl_most150_tx_light_power
 
 class s_xl_most150_gen_light_error(ctypes.Structure):
     _fields_ = [
         ("stressStarted", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST150_GEN_LIGHT_ERROR_EV = s_xl_most150_gen_light_error
 
 class s_xl_most150_gen_lock_error(ctypes.Structure):
     _fields_ = [
         ("stressStarted", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST150_GEN_LOCK_ERROR_EV = s_xl_most150_gen_lock_error
 
 class s_xl_most150_ctrl_busload(ctypes.Structure):
     _fields_ = [
         ("busloadStarted", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST150_CTRL_BUSLOAD_EV = s_xl_most150_ctrl_busload
 
 class s_xl_most150_async_busload(ctypes.Structure):
     _fields_ = [
         ("busloadStarted", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST150_ASYNC_BUSLOAD_EV = s_xl_most150_async_busload
 
 class s_xl_most150_systemlock_flag(ctypes.Structure):
     _fields_ = [
         ("state", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST150_SYSTEMLOCK_FLAG_EV = s_xl_most150_systemlock_flag
 
 class s_xl_most150_shutdown_flag(ctypes.Structure):
     _fields_ = [
         ("state", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST150_SHUTDOWN_FLAG_EV = s_xl_most150_shutdown_flag
 
 class s_xl_most150_spdif_mode(ctypes.Structure):
@@ -4520,18 +4734,21 @@ class s_xl_most150_spdif_mode(ctypes.Structure):
         ("spdifMode", ctypes.c_uint),
         ("spdifError", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST150_SPDIF_MODE_EV = s_xl_most150_spdif_mode
 
 class s_xl_most150_ecl(ctypes.Structure):
     _fields_ = [
         ("eclLineState", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST150_ECL_EV = s_xl_most150_ecl
 
 class s_xl_most150_ecl_termination(ctypes.Structure):
     _fields_ = [
         ("resistorEnabled", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST150_ECL_TERMINATION_EV = s_xl_most150_ecl_termination
 
 class s_xl_most150_nw_startup(ctypes.Structure):
@@ -4539,6 +4756,7 @@ class s_xl_most150_nw_startup(ctypes.Structure):
         ("error", ctypes.c_uint),
         ("errorInfo", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST150_NW_STARTUP_EV = s_xl_most150_nw_startup
 
 class s_xl_most150_nw_shutdown(ctypes.Structure):
@@ -4546,6 +4764,7 @@ class s_xl_most150_nw_shutdown(ctypes.Structure):
         ("error", ctypes.c_uint),
         ("errorInfo", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST150_NW_SHUTDOWN_EV = s_xl_most150_nw_shutdown
 
 class s_xl_most150_stream_state(ctypes.Structure):
@@ -4554,6 +4773,7 @@ class s_xl_most150_stream_state(ctypes.Structure):
         ("streamState", ctypes.c_uint),
         ("streamError", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST150_STREAM_STATE_EV = s_xl_most150_stream_state
 
 class s_xl_most150_stream_tx_buffer(ctypes.Structure):
@@ -4562,6 +4782,7 @@ class s_xl_most150_stream_tx_buffer(ctypes.Structure):
         ("numberOfBytes", ctypes.c_uint),
         ("status", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST150_STREAM_TX_BUFFER_EV = s_xl_most150_stream_tx_buffer
 
 class s_xl_most150_stream_rx_buffer(ctypes.Structure):
@@ -4571,6 +4792,7 @@ class s_xl_most150_stream_rx_buffer(ctypes.Structure):
         ("status", ctypes.c_uint),
         ("labelInfo", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST150_STREAM_RX_BUFFER_EV = s_xl_most150_stream_rx_buffer
 
 class s_xl_most150_stream_tx_underflow(ctypes.Structure):
@@ -4578,6 +4800,7 @@ class s_xl_most150_stream_tx_underflow(ctypes.Structure):
         ("streamHandle", ctypes.c_uint),
         ("reserved", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST150_STREAM_TX_UNDERFLOW_EV = s_xl_most150_stream_tx_underflow
 
 class s_xl_most150_stream_tx_label(ctypes.Structure):
@@ -4587,30 +4810,35 @@ class s_xl_most150_stream_tx_label(ctypes.Structure):
         ("connLabel", ctypes.c_uint),
         ("width", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST150_STREAM_TX_LABEL_EV = s_xl_most150_stream_tx_label
 
 class s_xl_most150_gen_bypass_stress(ctypes.Structure):
     _fields_ = [
         ("stressStarted", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST150_GEN_BYPASS_STRESS_EV = s_xl_most150_gen_bypass_stress
 
 class s_xl_most150_ecl_sequence(ctypes.Structure):
     _fields_ = [
         ("sequenceStarted", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST150_ECL_SEQUENCE_EV = s_xl_most150_ecl_sequence
 
 class s_xl_most150_ecl_glitch_filter(ctypes.Structure):
     _fields_ = [
         ("duration", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST150_ECL_GLITCH_FILTER_EV = s_xl_most150_ecl_glitch_filter
 
 class s_xl_most150_sso_result(ctypes.Structure):
     _fields_ = [
         ("status", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST150_SSO_RESULT_EV = s_xl_most150_sso_result
 
 class s_xl_most150_ctrl_tx_ack(ctypes.Structure):
@@ -4649,6 +4877,7 @@ class s_xl_most150_ctrl_tx_ack(ctypes.Structure):
 
         ("ctrlData", ctypes.c_ubyte*51),
     ]
+    __str__ = cls2str
 XL_MOST150_CTRL_TX_ACK_EV = s_xl_most150_ctrl_tx_ack
 
 class s_xl_most150_async_tx_ack(ctypes.Structure):
@@ -4661,6 +4890,7 @@ class s_xl_most150_async_tx_ack(ctypes.Structure):
         ("status", ctypes.c_uint),
         ("asyncData", ctypes.c_ubyte*1524),
     ]
+    __str__ = cls2str
 XL_MOST150_ASYNC_TX_ACK_EV = s_xl_most150_async_tx_ack
 
 class s_xl_most150_ethernet_tx(ctypes.Structure):
@@ -4673,12 +4903,14 @@ class s_xl_most150_ethernet_tx(ctypes.Structure):
         ("length", ctypes.c_uint),
         ("ethernetData", ctypes.c_ubyte*1510),
     ]
+    __str__ = cls2str
 XL_MOST150_ETHERNET_TX_ACK_EV = s_xl_most150_ethernet_tx
 
 class s_xl_most150_hw_sync(ctypes.Structure):
     _fields_ = [
         ("pulseCode", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_MOST150_HW_SYNC_EV = s_xl_most150_hw_sync
 
 class u_xl_most150_tag_data(ctypes.Union):
@@ -4728,6 +4960,7 @@ class u_xl_most150_tag_data(ctypes.Union):
         ("mostEclGlitchFilter", s_xl_most150_ecl_glitch_filter),
         ("mostSsoResult", s_xl_most150_sso_result),
     ]
+    __str__ = cls2str
 
 class s_xl_event_most150(ctypes.Structure):
     _anonymous_ = ("tagData",)
@@ -4742,6 +4975,7 @@ class s_xl_event_most150(ctypes.Structure):
         ("timeStampSync", XLuint64),
         ("tagData", u_xl_most150_tag_data),
     ]
+    __str__ = cls2str
 XLmost150event = s_xl_event_most150
 
 class s_xl_set_most150_special_node_info(ctypes.Structure):
@@ -4757,6 +4991,7 @@ class s_xl_set_most150_special_node_info(ctypes.Structure):
         ("asyncSendAttempts", ctypes.c_uint),
         ("macAddr", ctypes.c_ubyte*6),
     ]
+    __str__ = cls2str
 XLmost150SetSpecialNodeInfo = s_xl_set_most150_special_node_info
 
 class s_xl_most150_ctrl_tx_msg(ctypes.Structure):
@@ -4794,6 +5029,7 @@ class s_xl_most150_ctrl_tx_msg(ctypes.Structure):
 
         ("ctrlData", ctypes.c_ubyte*51),
     ]
+    __str__ = cls2str
 XLmost150CtrlTxMsg = s_xl_most150_ctrl_tx_msg
 
 class s_xl_most150_async_tx_msg(ctypes.Structure):
@@ -4807,6 +5043,7 @@ class s_xl_most150_async_tx_msg(ctypes.Structure):
         ("targetAddress", ctypes.c_uint),
         ("asyncData", ctypes.c_ubyte*XL_MOST150_ASYNC_SEND_PAYLOAD_MAX_SIZE),
     ]
+    __str__ = cls2str
 XLmost150AsyncTxMsg = s_xl_most150_async_tx_msg
 
 class s_xl_most150_ethernet_tx_msg(ctypes.Structure):
@@ -4821,6 +5058,7 @@ class s_xl_most150_ethernet_tx_msg(ctypes.Structure):
         ("length", ctypes.c_uint),
         ("ethernetData", ctypes.c_ubyte*XL_MOST150_ETHERNET_SEND_PAYLOAD_MAX_SIZE),
     ]
+    __str__ = cls2str
 XLmost150EthernetTxMsg = s_xl_most150_ethernet_tx_msg
 
 class s_xl_most150_sync_audio_parameter(ctypes.Structure):
@@ -4830,6 +5068,7 @@ class s_xl_most150_sync_audio_parameter(ctypes.Structure):
         ("device", ctypes.c_uint),
         ("mode", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XLmost150SyncAudioParameter = s_xl_most150_sync_audio_parameter
 
 class s_xl_most150_ctrl_busload_config(ctypes.Structure):
@@ -4840,6 +5079,7 @@ class s_xl_most150_ctrl_busload_config(ctypes.Structure):
         ("counterPosition", ctypes.c_uint),
         ("busloadCtrlMsg", s_xl_most150_ctrl_tx_msg),
     ]
+    __str__ = cls2str
 XLmost150CtrlBusloadConfig = s_xl_most150_ctrl_busload_config
 
 class u_xl_most150_busloadPkt(ctypes.Union):
@@ -4848,6 +5088,7 @@ class u_xl_most150_busloadPkt(ctypes.Union):
         ("busloadAsyncPkt", s_xl_most150_async_tx_msg),
         ("busloadEthernetPkt", s_xl_most150_ethernet_tx_msg),
     ]
+    __str__ = cls2str
 
 class s_xl_most150_async_busload_config(ctypes.Structure):
     _anonymous_ = ("busloadPkt",)
@@ -4858,6 +5099,7 @@ class s_xl_most150_async_busload_config(ctypes.Structure):
         ("counterPosition", ctypes.c_uint),
         ("busloadPkt", u_xl_most150_busloadPkt),
     ]
+    __str__ = cls2str
 XLmost150AsyncBusloadConfig = s_xl_most150_async_busload_config
 
 class s_xl_most150_stream_open(ctypes.Structure):
@@ -4868,6 +5110,7 @@ class s_xl_most150_stream_open(ctypes.Structure):
         ("reserved", ctypes.c_uint),
         ("latency", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XLmost150StreamOpen = s_xl_most150_stream_open
 
 class s_xl_most150_stream_get_info(ctypes.Structure):
@@ -4880,6 +5123,7 @@ class s_xl_most150_stream_get_info(ctypes.Structure):
         ("streamState", ctypes.c_uint),
         ("connLabels", ctypes.c_uint*XL_MOST150_STREAM_RX_NUM_CL_MAX),
     ]
+    __str__ = cls2str
 XLmost150StreamInfo = s_xl_most150_stream_get_info
 
 ### CAN / CAN-FD definitions ###
@@ -4938,12 +5182,14 @@ class s_xl_can_tx_msg(ctypes.Structure):
         ("reserved", ctypes.c_ubyte*7),
         ("data", ctypes.c_ubyte*XL_CAN_MAX_DATA_LEN),
     ]
+    __str__ = cls2str
 XL_CAN_TX_MSG = s_xl_can_tx_msg
 
 class u_xl_can_event_tag_data(ctypes.Union):
     _fields_ = [
         ("canMsg", s_xl_can_tx_msg),
     ]
+    __str__ = cls2str
 
 class s_xl_can_tx_event(ctypes.Structure):
     _anonymous_ = ("tagData",)
@@ -4957,6 +5203,7 @@ class s_xl_can_tx_event(ctypes.Structure):
         ("reserved", ctypes.c_ubyte*3),
         ("tagData", u_xl_can_event_tag_data),
     ]
+    __str__ = cls2str
 XLcanTxEvent = s_xl_can_tx_event
 
 class s_xl_can_rx_msg(ctypes.Structure):
@@ -4970,6 +5217,7 @@ class s_xl_can_rx_msg(ctypes.Structure):
         ("reserved", ctypes.c_ubyte*5),
         ("data", ctypes.c_ubyte*XL_CAN_MAX_DATA_LEN),
     ]
+    __str__ = cls2str
 XL_CAN_EV_RX_MSG = s_xl_can_rx_msg
 
 class s_xl_can_tx_request(ctypes.Structure):
@@ -4981,6 +5229,7 @@ class s_xl_can_tx_request(ctypes.Structure):
         ("reserved", ctypes.c_ushort),
         ("data", ctypes.c_ubyte*XL_CAN_MAX_DATA_LEN),
     ]
+    __str__ = cls2str
 XL_CAN_EV_TX_REQUEST = s_xl_can_tx_request
 
 class s_xl_can_chip_state(ctypes.Structure):
@@ -4991,6 +5240,7 @@ class s_xl_can_chip_state(ctypes.Structure):
         ("reserved", ctypes.c_ubyte),
         ("reserved0", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_CAN_EV_CHIP_STATE = s_xl_can_chip_state
 
 class XL_CAN_ERRC(enum.IntEnum):
@@ -5009,6 +5259,7 @@ class s_xl_can_error(ctypes.Structure):
         ("errorCode", ctypes.c_ubyte),
         ("reserved", ctypes.c_ubyte*95),
     ]
+    __str__ = cls2str
 XL_CAN_EV_ERROR = s_xl_can_error
 
 XL_CAN_QUEUE_OVERFLOW = 0x100
@@ -5028,6 +5279,7 @@ class u_xl_can_msg_tag_data(ctypes.Union):
         ("canChipState", s_xl_can_chip_state),
         ("canSyncPulse", s_xl_sync_pulse_ev),
     ]
+    __str__ = cls2str
 
 class s_xl_can_rx_event(ctypes.Structure):
     _anonymous_ = ("tagData",)
@@ -5042,6 +5294,7 @@ class s_xl_can_rx_event(ctypes.Structure):
         ("timeStampSync", XLuint64),
         ("tagData", u_xl_can_msg_tag_data),
     ]
+    __str__ = cls2str
 XLcanRxEvent = s_xl_can_rx_event
 
 ### ARINC429 definitions ###
@@ -5116,6 +5369,7 @@ class s_xl_a429_tx_params(ctypes.Structure):
         ("parity", ctypes.c_uint),
         ("minGap", ctypes.c_uint),
     ]
+    __str__ = cls2str
 
 class s_xl_a429_rx_params(ctypes.Structure):
     _fields_ = [
@@ -5126,6 +5380,7 @@ class s_xl_a429_rx_params(ctypes.Structure):
         ("minGap", ctypes.c_uint),
         ("autoBaudrate", ctypes.c_uint),
     ]
+    __str__ = cls2str
 
 class u_xl_a429_params(ctypes.Union):
     _fields_ = [
@@ -5133,6 +5388,7 @@ class u_xl_a429_params(ctypes.Union):
         ("rx", s_xl_a429_rx_params),
         ("raw", ctypes.c_ubyte*28),
     ]
+    __str__ = cls2str
 
 class s_xl_a429_params(ctypes.Structure):
     _anonymous_ = ("data",)
@@ -5141,6 +5397,7 @@ class s_xl_a429_params(ctypes.Structure):
         ("res1", ctypes.c_ushort),
         ("data", u_xl_a429_params),
     ]
+    __str__ = cls2str
 XL_A429_PARAMS = s_xl_a429_params
 
 class s_xl_a429_msg_tx(ctypes.Structure):
@@ -5155,6 +5412,7 @@ class s_xl_a429_msg_tx(ctypes.Structure):
         ("res2", ctypes.c_ushort),
         ("data", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_A429_MSG_TX = s_xl_a429_msg_tx
 
 class s_xl_a429_ev_tx_ok(ctypes.Structure):
@@ -5166,6 +5424,7 @@ class s_xl_a429_ev_tx_ok(ctypes.Structure):
         ("res1", ctypes.c_ushort),
         ("data", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_A429_EV_TX_OK = s_xl_a429_ev_tx_ok
 
 class s_xl_a429_ev_tx_err(ctypes.Structure):
@@ -5178,6 +5437,7 @@ class s_xl_a429_ev_tx_err(ctypes.Structure):
         ("res1", ctypes.c_ubyte),
         ("data", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_A429_EV_TX_ERR = s_xl_a429_ev_tx_err
 
 class s_xl_a429_ev_rx_ok(ctypes.Structure):
@@ -5188,6 +5448,7 @@ class s_xl_a429_ev_rx_ok(ctypes.Structure):
         ("res1", ctypes.c_ubyte*3),
         ("data", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_A429_EV_RX_OK = s_xl_a429_ev_rx_ok
 
 class s_xl_a429_ev_rx_err(ctypes.Structure):
@@ -5201,6 +5462,7 @@ class s_xl_a429_ev_rx_err(ctypes.Structure):
         ("res1", ctypes.c_ubyte),
         ("data", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XL_A429_EV_RX_ERR = s_xl_a429_ev_rx_err
 
 class s_xl_a429_ev_bus_statistic(ctypes.Structure):
@@ -5209,6 +5471,7 @@ class s_xl_a429_ev_bus_statistic(ctypes.Structure):
         ("busLoad", ctypes.c_uint),
         ("res1", ctypes.c_uint*3),
     ]
+    __str__ = cls2str
 XL_A429_EV_BUS_STATISTIC = s_xl_a429_ev_bus_statistic
 
 class u_xl_a429_rx_tag_data(ctypes.Union):
@@ -5220,6 +5483,7 @@ class u_xl_a429_rx_tag_data(ctypes.Union):
         ("a429BusStatistic", s_xl_a429_ev_bus_statistic),
         ("a429SyncPulse", s_xl_sync_pulse_ev),
     ]
+    __str__ = cls2str
 
 class s_xl_a429_rx_event(ctypes.Structure):
     _anonymous_ = ("tagData",)
@@ -5241,6 +5505,7 @@ class s_xl_a429_rx_event(ctypes.Structure):
         ("timeStampSync", XLuint64),
         ("tagData", u_xl_a429_rx_tag_data),
     ]
+    __str__ = cls2str
 XLa429RxEvent = s_xl_a429_rx_event
 
 #anonymous structure for driver config interface
@@ -5261,6 +5526,7 @@ class s_xl_channel_transceiver(ctypes.Structure):
         #XL_CHANNEL_CONFIG_ERROR_XXX
         ("configError", ctypes.c_uint),
     ]
+    __str__ = cls2str
 
 class s_xl_channel_drv_config_v1(ctypes.Structure):
     _fields_ = [
@@ -5287,6 +5553,7 @@ class s_xl_channel_drv_config_v1(ctypes.Structure):
         ("busParams", s_xl_bus_params),
         ("transceiver", s_xl_channel_transceiver),
     ]
+    __str__ = cls2str
 s_xl_channel_drv_config_v1._fields_.append(
     ("remoteChannel", ctypes.POINTER(s_xl_channel_drv_config_v1))
 )
@@ -5298,6 +5565,7 @@ class s_channel_drv_config_list_v1(ctypes.Structure):
         ("item", ctypes.POINTER(s_xl_channel_drv_config_v1)),
         ("count", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XLchannelDrvConfigListV1 = s_channel_drv_config_list_v1
 pXLchannelDrvConfigListV1 = ctypes.POINTER(s_channel_drv_config_list_v1)
 
@@ -5320,11 +5588,13 @@ class s_xl_device_drv_config_v1(ctypes.Structure):
         #device channel list
         ("channelList", s_channel_drv_config_list_v1),
     ]
+    __str__ = cls2str
 class s_xl_device_drv_config_remote_list(ctypes.Structure):
     _fields_ = [
         ("item", ctypes.POINTER(s_xl_device_drv_config_v1)),
         ("count", ctypes.c_uint),
     ]
+    __str__ = cls2str
 #Insert structure
 s_xl_device_drv_config_v1._fields_.insert(
     8, ("remoteDeviceList", s_xl_device_drv_config_remote_list)
@@ -5337,6 +5607,7 @@ class s_device_drv_config_list_v1(ctypes.Structure):
         ("item", ctypes.POINTER(s_xl_device_drv_config_v1)),
         ("count", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XLdeviceDrvConfigListV1 = s_device_drv_config_list_v1
 pXLdeviceDrvConfigListV1 = ctypes.POINTER(s_device_drv_config_list_v1)
 
@@ -5349,6 +5620,7 @@ class s_xl_virtual_port_drv_config_v1(ctypes.Structure):
         #ID of the switch in the network - switches in different networks may have the same switch ID
         ("switchId", XLswitchId),
     ]
+    __str__ = cls2str
 XLvirtualportDrvConfigV1 = s_xl_virtual_port_drv_config_v1
 pXLvirtualportDrvConfigV1 = ctypes.POINTER(s_xl_virtual_port_drv_config_v1)
 
@@ -5357,6 +5629,7 @@ class s_virtual_port_drv_config_list_v1(ctypes.Structure):
         ("item", ctypes.POINTER(s_xl_virtual_port_drv_config_v1)),
         ("count", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XLvirtualportDrvConfigListV1 = s_virtual_port_drv_config_list_v1
 pXLvirtualportDrvConfigListV1 = ctypes.POINTER(s_virtual_port_drv_config_list_v1)
 
@@ -5371,6 +5644,7 @@ class s_xl_measurement_point_drv_config_v1(ctypes.Structure):
         #the hardware channel the MP is connected to
         ("channel", s_xl_channel_drv_config_v1),
     ]
+    __str__ = cls2str
 XLmeasurementpointDrvConfigV1 = s_xl_measurement_point_drv_config_v1
 pXLmeasurementpointDrvConfigV1 = ctypes.POINTER(s_xl_measurement_point_drv_config_v1)
 
@@ -5379,6 +5653,7 @@ class s_xl_measurement_point_drv_config_list_v1(ctypes.Structure):
         ("item", ctypes.POINTER(s_xl_measurement_point_drv_config_v1)),
         ("count", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XLmeasurementpointDrvConfigListV1 = s_xl_measurement_point_drv_config_list_v1
 pXLmeasurementpointDrvConfigListV1 = ctypes.POINTER(s_xl_measurement_point_drv_config_list_v1)
 
@@ -5399,6 +5674,7 @@ class s_xl_switch_drv_config_v1(ctypes.Structure):
         #Measurement Point list
         ("mpList", s_xl_measurement_point_drv_config_list_v1),
     ]
+    __str__ = cls2str
 XLswitchDrvConfigV1 = s_xl_switch_drv_config_v1
 pXLswitchDrvConfigV1 = ctypes.POINTER(s_xl_switch_drv_config_v1)
 
@@ -5407,6 +5683,7 @@ class s_switch_drv_config_list_v1(ctypes.Structure):
         ("item", ctypes.POINTER(s_xl_switch_drv_config_v1)),
         ("count", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XLswitchDrvConfigListV1 = s_switch_drv_config_list_v1
 pXLswitchDrvConfigListV1 = ctypes.POINTER(s_switch_drv_config_list_v1)
 
@@ -5426,6 +5703,7 @@ class s_xl_network_drv_config_v1(ctypes.Structure):
         ("networkType", ctypes.c_int),
         ("switchList", s_switch_drv_config_list_v1),
     ]
+    __str__ = cls2str
 XLnetworkDrvConfigV1 = s_xl_network_drv_config_v1
 pXLnetworkDrvConfigV1 = ctypes.POINTER(s_xl_network_drv_config_v1)
 
@@ -5434,6 +5712,7 @@ class s_xl_network_drv_config_list_v1(ctypes.Structure):
         ("item", ctypes.POINTER(s_xl_network_drv_config_v1)),
         ("count", ctypes.c_uint),
     ]
+    __str__ = cls2str
 XLnetworkDrvConfigListV1 = s_xl_network_drv_config_list_v1
 pXLnetworkDrvConfigListV1 = ctypes.POINTER(s_xl_network_drv_config_list_v1)
 
@@ -5442,6 +5721,7 @@ class s_xl_dll_drv_config_v1(ctypes.Structure):
         #version of the loaded DLL instance
         ("dllVersion", XLuint64),
     ]
+    __str__ = cls2str
 XLdllDrvConfigV1 = s_xl_dll_drv_config_v1
 pXLdllDrvConfigV1 = ctypes.POINTER(s_xl_dll_drv_config_v1)
 
@@ -5486,6 +5766,7 @@ class s_xlapi_driver_config_v1(ctypes.Structure):
         ("fctGetMeasurementPointConfig", TP_FCT_XLAPI_GET_MEASUREMENT_POINT_CONFIG_V1),
         ("fctGetDllConfig", TP_FCT_XLAPI_GET_DLL_CONFIG_V1),
     ]
+    __str__ = cls2str
 XLapiIDriverConfigV1 = s_xlapi_driver_config_v1
 pXLapiIDriverConfigV1 = ctypes.POINTER(s_xlapi_driver_config_v1)
 
@@ -5511,7 +5792,7 @@ except Exception as exc:
 class VectorError(Exception):
     def __init__(self, error_code, error_text, fnc_name):
         super(VectorError, self).__init__(
-            f"Error {error_code}: {fnc_name} failed ({error_text})"
+            "Error {0}: {1} failed ({2})".format(error_code, fnc_name, error_text)
         )
         # keep reference to args for pickling
 
