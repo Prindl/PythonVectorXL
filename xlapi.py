@@ -1,6 +1,6 @@
 ##############################################################################
 #                                                                            #
-# Module: xlApi                                                              #
+# Module: xlapi                                                              #
 # Author: Maximilian Prindl                                                  #
 #                                                                            #
 # A complete python ctypes wrapper lib for the Vector XL Driver Library.     #
@@ -16,40 +16,48 @@ import enum #to support python 3.4 and lower: python -m pip install enum34
 import sys
 
 def indent_counter(func):
-    def wrapper(self):
+    def wrapper(cls):
         wrapper.indent += 1
-        tmp = func(self)
+        tmp = func(cls)
         wrapper.indent -= 1
         return tmp
     wrapper.indent = 0
     return wrapper
 
 @indent_counter
-def cls2str(self):
+def cls2str(cls):
     if cls2str.indent == 1:
-        tmp = ["Class " + type(self).__name__ + " Fields:"]
+        tmp = ["Class " + type(cls).__name__ + " Fields:"]
     else:
         tmp = []
     spaces = " " * (4*cls2str.indent - 2) + "- "
-    for f in self._fields_:
+    for f in cls._fields_:
         tmp.append("\r\n{0}{1}".format(spaces, f[0]))
         if "Array" in f[1].__name__:
-            tmp_array = [str(x) for x in getattr(self, f[0])]
+            tmp_array = [str(x) for x in getattr(cls, f[0])]
             tmp.append("({0}): [{1}]".format(f[1].__name__, ", ".join(tmp_array)))
         elif issubclass(f[1], ctypes.Structure):
-            if hasattr(self, "_anonymous_"):
-                tmp.append("(Structure - {0})[Anonymous]: {1}".format(f[1].__name__, getattr(self, f[0])))
+            if hasattr(cls, "_anonymous_"):
+                tmp.append("(Structure - {0})[Anonymous]: {1}".format(f[1].__name__, getattr(cls, f[0])))
             else:
-                tmp.append("(Structure - {0}): {1}".format(f[1].__name__, getattr(self, f[0])))
+                tmp.append("(Structure - {0}): {1}".format(f[1].__name__, getattr(cls, f[0])))
         elif issubclass(f[1], ctypes.Union):
-            if hasattr(self, "_anonymous_"):
-                tmp.append("(Union - {0})[Anonymous]: {1}".format(f[1].__name__, getattr(self, f[0])))
+            if hasattr(cls, "_anonymous_"):
+                tmp.append("(Union - {0})[Anonymous]: {1}".format(f[1].__name__, getattr(cls, f[0])))
             else:
-                tmp.append("(Union - {0}): {1}".format(f[1].__name__, getattr(self, f[0])))
+                tmp.append("(Union - {0}): {1}".format(f[1].__name__, getattr(cls, f[0])))
         else:
-            tmp.append("({0}): {1}".format(f[1].__name__, getattr(self, f[0])))
+            tmp.append("({0}): {1}".format(f[1].__name__, getattr(cls, f[0])))
     return "".join(tmp)
 
+def enum2str(cls):
+    tmp = []
+    for name, v in cls.__members__.items():
+        if isinstance(v.value, int):
+            tmp.append("  {0}: 0x{1:02X}".format(name, v.value))
+        else:
+            tmp.append("  {0}: {1}".format(name, v.value))
+    return "\n".join(["{0}:".format(cls.__name__)] + tmp)
 
 class XL_BUS_TYPE(enum.IntFlag):
     NONE     =    0
@@ -1578,26 +1586,26 @@ XL_MAX_REMOTE_DEVICE_INFO = 16
 XL_ALL_REMOTE_DEVICES     = 4294967295
 XL_MAX_REMOTE_ALIAS_SIZE  = 64
 
-class  XL_REMOTE(enum.IntEnum):
+class XL_REMOTE(enum.IntEnum):
     OFFLINE = 1
     ONLINE  = 2
     BUSY    = 3
     CONNECION_REFUSED = 4
 
-class  XL_REMOTE_ADD(enum.IntEnum):
+class XL_REMOTE_ADD(enum.IntEnum):
     PERMANENT = 0
     TEMPORARY = 1
 
-class  XL_REMOTE_REGISTER(enum.IntEnum):
+class XL_REMOTE_REGISTER(enum.IntEnum):
     NONE         = 0
     CONNECT      = 1
     TEMP_CONNECT = 2
 
-class  XL_REMOTE_DISCONNECT(enum.IntEnum):
+class XL_REMOTE_DISCONNECT(enum.IntEnum):
     NONE         = 0
     REMOVE_ENTRY = 1
 
-class  XL_REMOTE_DEVICE(enum.IntEnum):
+class XL_REMOTE_DEVICE(enum.IntEnum):
     #the device is present
     AVAILABLE       = 1
     #the device has a configuration entry in registry
@@ -1614,7 +1622,7 @@ class  XL_REMOTE_DEVICE(enum.IntEnum):
     NO_NET_SEARCH   = 0
     NET_SEARCH      = 1
 
-class  XL_REMOTE_DEVICE_TYPE(enum.IntEnum):
+class XL_REMOTE_DEVICE_TYPE(enum.IntEnum):
     UNKNOWN     = 0
     VN8900      = 1
     STANDARD_PC = 2
@@ -1687,7 +1695,7 @@ XLremoteDeviceInfo = s_xl_remote_device_info
 
 XL_CHANNEL_FLAG_EX_MASK = lambda n: 1 << n
 #Flags for channelCapabilities
-class  XL_CHANNEL_FLAG(enum.IntFlag):
+class XL_CHANNEL_FLAG(enum.IntFlag):
     TIME_SYNC_RUNNING    = 0x00000001
     #Device is not capable of hardware-based time synchronization via Sync-line
     NO_HWSYNC_SUPPORT    = 0x00000400
@@ -1696,13 +1704,15 @@ class  XL_CHANNEL_FLAG(enum.IntFlag):
     CANFD_BOSCH_SUPPORT  = 0x20000000
     CMACTLICENSE_SUPPORT = 0x40000000
     CANFD_ISO_SUPPORT    = 0x80000000
-    EX1_TIME_SYNC_RUNNING   = XL_CHANNEL_FLAG_EX_MASK(0)
-    EX1_HWSYNC_SUPPORT      = XL_CHANNEL_FLAG_EX_MASK(4)
-    EX1_CANFD_ISO_SUPPORT   = XL_CHANNEL_FLAG_EX_MASK(10)
-    EX1_SPDIF_CAPABLE       = XL_CHANNEL_FLAG_EX_MASK(20)
-    EX1_CANFD_BOSCH_SUPPORT = XL_CHANNEL_FLAG_EX_MASK(35)
+
+class XL_CHANNEL_FLAG_EX1(enum.IntFlag):
+    TIME_SYNC_RUNNING   = XL_CHANNEL_FLAG_EX_MASK(0)
+    HWSYNC_SUPPORT      = XL_CHANNEL_FLAG_EX_MASK(4)
+    CANFD_ISO_SUPPORT   = XL_CHANNEL_FLAG_EX_MASK(10)
+    SPDIF_CAPABLE       = XL_CHANNEL_FLAG_EX_MASK(20)
+    CANFD_BOSCH_SUPPORT = XL_CHANNEL_FLAG_EX_MASK(35)
     #Ethernet device operates in network-based instead of channel-based mode
-    EX1_NET_ETH_SUPPORT     = XL_CHANNEL_FLAG_EX_MASK(36)
+    NET_ETH_SUPPORT     = XL_CHANNEL_FLAG_EX_MASK(36)
 
 class XL_MOST_SOURCE(enum.IntEnum):
     """Defines for xlMostSwitchEventSources"""
@@ -5753,7 +5763,9 @@ TP_FCT_XLAPI_GET_SWITCH_CONFIG_V1 = __func_ptr(
 TP_FCT_XLAPI_GET_NETWORK_CONFIG_V1 = __func_ptr(
     XLstatus, XLdrvConfigHandle, pXLnetworkDrvConfigListV1
 )
-TP_FCT_XLAPI_GET_DLL_CONFIG_V1 = __func_ptr(XLstatus, XLdrvConfigHandle, pXLdllDrvConfigV1)
+TP_FCT_XLAPI_GET_DLL_CONFIG_V1 = __func_ptr(
+    XLstatus, XLdrvConfigHandle, pXLdllDrvConfigV1
+)
 
 class s_xlapi_driver_config_v1(ctypes.Structure):
     _fields_ = [
