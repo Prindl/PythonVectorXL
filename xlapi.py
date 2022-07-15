@@ -33,21 +33,26 @@ def cls2str(cls):
     spaces = " " * (4*cls2str.indent - 2) + "- "
     for f in cls._fields_:
         tmp.append("\r\n{0}{1}".format(spaces, f[0]))
+        attribute = getattr(cls, f[0])
         if "Array" in f[1].__name__:
-            tmp_array = [str(x) for x in getattr(cls, f[0])]
-            tmp.append("({0}): [{1}]".format(f[1].__name__, ", ".join(tmp_array)))
+            if "char_Array" in f[1].__name__:
+                tmp_array = [chr(x) for x in attribute]
+                tmp.append("({0}): '{1}'".format(f[1].__name__, "".join(tmp_array)))
+            else:
+                tmp_array = [str(x) for x in attribute]
+                tmp.append("({0}): [{1}]".format(f[1].__name__, ", ".join(tmp_array)))
         elif issubclass(f[1], ctypes.Structure):
             if hasattr(cls, "_anonymous_"):
-                tmp.append("(Structure - {0})[Anonymous]: {1}".format(f[1].__name__, getattr(cls, f[0])))
+                tmp.append("(Structure - {0})[Anonymous]: {1}".format(f[1].__name__, attribute))
             else:
-                tmp.append("(Structure - {0}): {1}".format(f[1].__name__, getattr(cls, f[0])))
+                tmp.append("(Structure - {0}): {1}".format(f[1].__name__, attribute))
         elif issubclass(f[1], ctypes.Union):
             if hasattr(cls, "_anonymous_"):
-                tmp.append("(Union - {0})[Anonymous]: {1}".format(f[1].__name__, getattr(cls, f[0])))
+                tmp.append("(Union - {0})[Anonymous]: {1}".format(f[1].__name__, attribute))
             else:
-                tmp.append("(Union - {0}): {1}".format(f[1].__name__, getattr(cls, f[0])))
+                tmp.append("(Union - {0}): {1}".format(f[1].__name__, attribute))
         else:
-            tmp.append("({0}): {1}".format(f[1].__name__, getattr(cls, f[0])))
+            tmp.append("({0}): 0x{1:02X}".format(f[1].__name__, attribute))
     return "".join(tmp)
 
 def enum2str(cls):
@@ -829,6 +834,7 @@ class s_xl_can_msg(ctypes.Structure):
         ("flags", ctypes.c_ushort),
         ("dlc", ctypes.c_ushort),
         ("res1", XLuint64),
+        ("data", ctypes.c_ubyte*MAX_MSG_LEN),
         ("res2", XLuint64),
     ]
     __str__ = cls2str
@@ -926,11 +932,11 @@ class XL_OUTPUT_MODE(enum.IntEnum):
     #switch CAN trx into default silent mode
     SILENT = 0
     #switch CAN trx into normal mode
-    XL_OUTPUT_MODE_NORMAL = 1
+    NORMAL = 1
     #switch CAN trx into silent mode with tx pin off
-    XL_OUTPUT_MODE_TX_OFF = 2
+    TX_OFF = 2
     #switch CAN trx into SJA1000 silent mode
-    XL_OUTPUT_MODE_SJA_1000_SILENT = 3
+    SJA_1000_SILENT = 3
 
 class XL_TRANSCEIVER_MODE(enum.IntEnum):
     EVENT_ERROR = 1
@@ -1087,7 +1093,9 @@ class u_xl_kline_error(ctypes.Union):
     __str__ = cls2str
 
 class s_xl_kline_error(ctypes.Structure):
-    _anonymous_ = ("data",)
+    #if a nested structure or union has a member of the same name it will shadow the other one,
+    #which is why data is not anonymous
+    #_anonymous_ = ("data",)
     _fields_ = [
         ("klineErrorTag", ctypes.c_uint),
         ("reserved", ctypes.c_uint),
@@ -3944,7 +3952,9 @@ class u_xl_eth_eventInfo(ctypes.Union):
     __str__ = cls2str
 
 class s_xl_eth_lostevent(ctypes.Structure):
-    _anonymous_ = ("eventInfo",)
+    #if a nested structure or union has a member of the same name it will shadow the other one,
+    #which is why eventInfo is not anonymous
+    #_anonymous_ = ("eventInfo",)
     _fields_ = [
         #Type of event lost
         ("eventTypeLost", XLethEventTag),
