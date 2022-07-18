@@ -6,11 +6,26 @@
 # A complete python ctypes wrapper lib for the Vector XL Driver Library.     #
 # Contains the #define instructions, struct/union typdef instructions and    #
 # function definitions(loads the DLL as well) of the 'vxlapi.h'.             #
-#   1)defines are classed into enums(Enum/IntEnum/IntFlag):                  #
+#   1)#defines are classed into enums(Enum/IntEnum/IntFlag):                 #
 #       -> #define XL_BUS_TYPE_CAN can be acessed through XL_BUS_TYPE.CAN    #
-#   2)struct and union are classed into ctypes.Structure and ctypes.Union    #
+#   2)struct/union is classed into ctypes.Structure/Union                    #
+#   3)Comments in vxlapi.h and the documenting PDF were added as             #
+#     doc-strings (__doc__) to functions                                     #
 #                                                                            #
 ##############################################################################
+"""
+A complete ctypes wrapper for the Vector XL Driver Library.
+The Vector XL Driver Library is only available on Windows.
+
+Author: Maximilian Prindl
+
+Usage:
+    import xlapi
+    xlapi.xlOpenDriver()
+    ... DO STUFF ...
+    xlapi.xlCloseDriver()
+"""
+
 import ctypes
 import enum #to support python 3.4 and lower: python -m pip install enum34
 import sys
@@ -26,6 +41,7 @@ def indent_counter(func):
 
 @indent_counter
 def cls2str(cls):
+    """A function that returns a string representation of a ctypes.Structure/Union."""
     if cls2str.indent == 1:
         tmp = ["Class " + type(cls).__name__ + " Fields:"]
     else:
@@ -56,6 +72,7 @@ def cls2str(cls):
     return "".join(tmp)
 
 def enum2str(cls):
+    """A function that returns a string representation of enum.Enum."""
     tmp = []
     for name, v in cls.__members__.items():
         if isinstance(v.value, int):
@@ -5791,8 +5808,11 @@ class s_xlapi_driver_config_v1(ctypes.Structure):
     __str__ = cls2str
 XLapiIDriverConfigV1 = s_xlapi_driver_config_v1
 pXLapiIDriverConfigV1 = ctypes.POINTER(s_xlapi_driver_config_v1)
-
-### Load the vxlapi.dll (or vxlapi64.dll) ###
+##############################################################################
+#                                                                            #
+#                   Load the vxlapi.dll (or vxlapi64.dll)                    #
+#                                                                            #
+##############################################################################
 if sys.platform.startswith("win"):
     __LIB_NAME = "vxlapi64.dll" if sys.maxsize > 2**32 else "vxlapi.dll"
     __LOADER = ctypes.windll
@@ -5806,7 +5826,6 @@ try:
     _vector_xlapi_dll_ = __LOADER.LoadLibrary(__LIB_NAME)
 except Exception as exc:
     # We search in local folder for the .dll
-
     __LOCAL_LIB = "\\".join(__file__.split("\\")[0:-1] + [__LIB_NAME])
     print("Could not load vxlapi, trying to load local copy: {0}".format(__LOCAL_LIB))
     _vector_xlapi_dll_ = __LOADER.LoadLibrary(__LOCAL_LIB)
@@ -5817,27 +5836,49 @@ class VectorError(Exception):
             "Error {0}: {1} failed ({2})".format(error_code, fnc_name, error_text)
         )
         # keep reference to args for pickling
-
         self._args = error_code, error_text, fnc_name
+        self.error_code, self.error_text, self.fnc_name = self._args
 
     def __reduce__(self):
         return type(self), self._args
 
 def check_xl_status(res, fnc, args):
+    """A function to verify the return value of most XL library functions."""
     if res > 0:
         raise VectorError(res, xlGetErrorString(res).decode(), fnc.__name__)
     return res
-
 
 xlOpenDriver = _vector_xlapi_dll_.xlOpenDriver
 xlOpenDriver.restype = XLstatus
 xlOpenDriver.argtypes = []
 xlOpenDriver.errcheck = check_xl_status
+xlOpenDriver.__doc__ = """
+xlapi.xlOpenDriver
+    Each application must call this function to load the driver.
+    If the function call is not successful, no other API calls are possible.
+Syntax:
+    XLstatus xlOpenDriver(void)
+Args:
+    None
+Returns:
+    XLstatus (error code)
+"""
 
 xlCloseDriver = _vector_xlapi_dll_.xlCloseDriver
 xlCloseDriver.restype = XLstatus
 xlCloseDriver.argtypes = []
 xlCloseDriver.errcheck = check_xl_status
+xlCloseDriver.__doc__ = """
+xlapi.xlCloseDriver
+    This function is used to unload the driver, if applications are using it.
+    Note: Does not close open ports!!!
+Syntax:
+    XLstatus xlCloseDriver(void)
+Args:
+    None
+Returns:
+    XLstatus (error code)
+"""
 
 xlGetApplConfig = _vector_xlapi_dll_.xlGetApplConfig
 xlGetApplConfig.restype = XLstatus
@@ -5856,6 +5897,36 @@ xlGetApplConfig.argtypes = [
     ctypes.c_uint,
 ]
 xlGetApplConfig.errcheck = check_xl_status
+xlGetApplConfig.__doc__ = """
+xlapi.xlGetApplConfig
+    This function gets the hardware settings for an application which are
+    configured in the Vector Hardware Configuration tool. The information can
+    then be used to get the required channel mask. To open a port with
+    multiple channels, the retrieved channel masks have to be combined and
+    then passed over to the open port function.
+Syntax:
+    XLstatus xlGetApplConfig(
+        char *appName
+        unsigned int appChannel,
+        unsigned int *pHwType,
+        unsigned int *pHwIndex,
+        unsigned int *pHwChannel,
+        unsigned int busType
+    )
+Args:
+    appName: Name of the application to be read
+    appChannel: Selects the application channel (0,1, …). An app can offer
+                several channels, which are assigned to physical channels.
+    pHwType: Hardware type is returned (XL_HWTYPE)
+    pHwIndex: Index of same hardware types is returned (0,1, ...)
+              e.g. 2 VN1610:
+                -VN1610 1: hwIndex 0
+                -VN1610 2: hwIndex 1
+    pHwChannel: Channel index of same hardware types is returned (0,1, ...)
+    busType: the bus type which is used by the application (XL_BUS_TYPE)
+Returns:
+    XLstatus (error code)
+"""
 
 xlSetApplConfig = _vector_xlapi_dll_.xlSetApplConfig
 xlSetApplConfig.restype = XLstatus
@@ -5874,6 +5945,34 @@ xlSetApplConfig.argtypes = [
     ctypes.c_uint,
 ]
 xlSetApplConfig.errcheck = check_xl_status
+xlSetApplConfig.__doc__ = """
+xlapi.xlSetApplConfig
+    Creates a new application in the Vector Hardware Configuration or sets
+    the channel configuration in an existing app. To set an app channel to
+    "not assigned" state set hwType, hwIndex and hwChannel to 0.
+Syntax:
+    XLstatus xlSetApplConfig(
+        char *appName,
+        unsigned int appChannel,
+        unsigned int hwType,
+        unsigned int hwIndex,
+        unsigned int hwChannel,
+        unsigned int busType
+    )
+Args:
+    appName: Name of the application to be set
+    appChannel: Application channel (0,1, …) to be accessed
+    HwType: Contains the hardware type (XL_HWTYPE)
+    HwIndex: Index of same hardware types (0,1, ...)
+              e.g. 2 VN1610:
+                -VN1610 1: hwIndex 0
+                -VN1610 2: hwIndex 1
+    HwChannel: Channel index on one physical device (0, 1, ...)
+    busType: the bus type which is used by the application (XL_BUS_TYPE)
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlGetDriverConfig = _vector_xlapi_dll_.xlGetDriverConfig
 xlGetDriverConfig.restype = XLstatus
@@ -5882,6 +5981,16 @@ xlGetDriverConfig.argtypes = [
     pXLdriverConfig,
 ]
 xlGetDriverConfig.errcheck = check_xl_status
+xlGetDriverConfig.__doc__ = """
+xlapi.xlGetDriverConfig
+    Gets detailed information on the hardware configuration of the system.
+Syntax:
+    XLstatus xlGetDriverConfig(XLdriverConfig *pDriverConfig)
+Args:
+    pDriverConfig: a pointer to XLdriverConfig
+Returns:
+    XLstatus (error code)
+"""
 
 xlCreateDriverConfig = _vector_xlapi_dll_.xlCreateDriverConfig
 xlCreateDriverConfig.restype = XLstatus
@@ -5892,6 +6001,40 @@ xlCreateDriverConfig.argtypes = [
     ctypes.POINTER(XLIDriverConfig),
 ]
 xlCreateDriverConfig.errcheck = check_xl_status
+xlCreateDriverConfig.__doc__ = """
+xlapi.xlCreateDriverConfig
+    This function allocates a structure that holds information on the
+    hardware configuration. Compared to its predecessors xlGetDriverConfig
+    and xlGetRemoteDriverConfig, it has the following advantages:
+      - Has a versioned interface, which will allow later XL API versions to
+        add additional fields and structs.
+      - Provides information on networks, segments, measurement points and
+        virtual ports.
+      - Logically separates devices from the channels on these devices.
+      - Is not limited to 64 channels.
+      - Combines the local and remote channel information in a common structure.
+    The application may call xlCreateDriverConfig at any time after a
+    successful xlOpenDriver call. The returned instance of the
+    XLIDriverConfig structure holds the state of the driver configuration at
+    the time of the call. The function pointers contained in the returned
+    structure query this state. An application may hold multiple instances of
+    XLIDriverConfig structures at the same time. Once the application does
+    not need an instance anymore, it must release the instance with
+    xlDestroyDriverConfig.
+Syntax:
+    xlCreateDriverConfig(
+        XLIdriverConfigVersion version,
+        struct XLIDriverConfig  *pConfigInterface
+    )
+Args:
+    version: Requested version of XLIDriverConfig.
+             Currently the only value is XL_IDRIVER_CONFIG_VERSION_1
+    pConfigInterface: Pointer to a structure specified by the version
+                      parameter. For XL_IDRIVER_CONFIG_VERSION_1, the
+                      structure must have type XLapiIDriverConfigV1.
+Returns:
+    XLstatus (error code)
+"""
 
 xlDestroyDriverConfig = _vector_xlapi_dll_.xlDestroyDriverConfig
 xlDestroyDriverConfig.restype = XLstatus
@@ -5900,6 +6043,17 @@ xlDestroyDriverConfig.argtypes = [
     XLdrvConfigHandle,
 ]
 xlDestroyDriverConfig.errcheck = check_xl_status
+xlDestroyDriverConfig.__doc__ = """
+xlapi.xlDestroyDriverConfig
+    This function releases the memory allocated for an instance of the
+    XLIDriver-Config structure.
+Syntax:
+    xlDestroyDriverConfig(XLdrvConfigHandle  configHandle)
+Args:
+    configHandle: Handle for the XLIDriverConfig instance to be released
+Returns:
+    XLstatus (error code)
+"""
 
 xlGetChannelIndex = _vector_xlapi_dll_.xlGetChannelIndex
 xlGetChannelIndex.restype = ctypes.c_int
@@ -5911,6 +6065,31 @@ xlGetChannelIndex.argtypes = [
     #hwChannel
     ctypes.c_int,
 ]
+xlGetChannelIndex.__doc__ = """
+xlapi.xlGetChannelIndex
+    This function retrieves the channel index of a particular hardware
+    channel.
+Syntax:
+    int xlGetChannelIndex (
+        int hwType,
+        int hwIndex,
+        int hwChannel
+    )
+Args:
+    hwType: Required to distinguish the different hardware types
+            e.g.
+              XL_HWTYPE_CANCARDXL
+              XL_HWTYPE_CANBOARDXL
+            Parameter -1 can be used if the hardware type does not matter.
+    hwIndex: Required to distinguish between two or more devices of the same
+             hardware type (-1, 0, 1…). Parameter -1 is used to retrieve the
+             first available hardware. The type depends on hwType.
+    hwChannel: Required to distinguish the hardware channel of the selected
+               device (-1, 0, 1, …). Parameter -1 can be used to retrieve
+               the first available channel.
+Returns:
+    int (channel index)
+"""
 
 xlGetChannelMask = _vector_xlapi_dll_.xlGetChannelMask
 xlGetChannelMask.restype = XLaccess
@@ -5922,6 +6101,32 @@ xlGetChannelMask.argtypes = [
     #hwChannel
     ctypes.c_int,
 ]
+xlGetChannelMask.__doc__ = """
+xlapi.xlGetChannelMask
+    This function retrieves the channel mask of a particular hardware channel.
+    Typically, the parameters are directly read from the Vector Hardware
+    Configuration tool via xlGetApplConfig.
+Syntax:
+    XLaccess xlGetChannelMask(
+        int hwType,
+        int hwIndex,
+        int hwChannel
+    )
+Args:
+    hwType: Required to distinguish the different hardware types
+            e.g.
+              XL_HWTYPE_CANCARDXL
+              XL_HWTYPE_CANBOARDXL
+            Parameter -1 can be used if the hardware type does not matter.
+    hwIndex: Required to distinguish between two or more devices of the same
+             hardware type (-1, 0, 1…). Parameter -1 is used to retrieve the
+             first available hardware. The type depends on hwType.
+    hwChannel: Required to distinguish the hardware channel of the selected
+               device (-1, 0, 1, …). Parameter -1 can be used to retrieve
+               the first available channel.
+Returns:
+    XLaccess (channel mask)
+"""
 
 xlOpenPort = _vector_xlapi_dll_.xlOpenPort
 xlOpenPort.restype = XLstatus
@@ -5942,6 +6147,62 @@ xlOpenPort.argtypes = [
     ctypes.c_uint,
 ]
 xlOpenPort.errcheck = check_xl_status
+xlOpenPort.__doc__ = """
+xlapi.xlOpenPort
+    This function opens a port for a bus type (e. g. CAN) and grants access
+    to the different channels that are selected by the accessMask. It is
+    possible to open more ports on a specific channel, but only the first
+    one gets init access. The permissionMask returns the channels which get
+    init access.
+Syntax:
+    XLstatus xlOpenPort(
+        XlportHandle *portHandle,
+        char *userName,
+        XLaccess accessMask,
+        XLaccess *permissionMask,
+        unsigned int rxQueueSize,
+        unsigned int xlInterfaceVersion,
+        unsigned int busType
+    )
+Args:
+    portHandle: Pointer to a variable that receives the portHandle. This
+                handle must be used for all further calls to the port.
+    userName: The name of the app listed in the Vector Hardware Configuration
+              Note: Can be empty
+    accessMask: Specifies the channels to be accessed. Typically, the access
+                mask can be directly retrieved from the Vector Hardware
+                Configuration if there is a prepared application setup.
+                (see section xlGetChannelMask on page 41).
+    permissionMask: The channel mask, where init access is requested. Mask
+                    for those channels that have init access is returned.
+    rxQueueSize: The size of the receive queue:
+                    - CAN, LIN, DAIO, K-Line: Specifies how many events can
+                      be stored in the queue. The value must be a power of 2
+                      and within a range of 16…32768. The actual queue size
+                      is rxQueueSize-1. The rxQueuesize depends on the
+                      busType and queue version:
+                        - V3: queue size in events
+                        - V4: queue size in bytes
+                    - CAN FD: Size of the port receive queue allocated by the
+                      driver in bytes. The value must be a power of 2 and
+                      within a range of 8192…524288 bytes (0.5 MB).
+                    - MOST, FlexRay: Size of the port receive queue allocated
+                      by the driver in bytes. The value must be a power of 2
+                      and within a range of 8192…1048576 bytes (1 MB).
+                    - Ethernet: Size of the port receive queue allocated by
+                      the driver in bytes. The value must be a power of 2 and
+                      within a range of 65536…8*1024*1024 bytes (8 MB).
+                    - ARINC: Size of the port receive queue allocated by the
+                      driver in bytes. The value must be a power of 2 and
+                      within a range of 8192…524288 bytes (0.5 MB).
+    xlInterfaceVersion: Current API version, e. g.:
+                          XL_INTERFACE_VERSION.V3 for CAN, LIN, DAIO, K-Line
+                          XL_INTERFACE_VERSION.V4 for MOST, CAN FD, Ethernet,
+                                                      FlexRay, ARINC429
+    busType: Bus type that should be activated (XL_BUS_TYPE)
+Returns:
+    XLstatus (error code)
+"""
 
 xlSetTimerRate = _vector_xlapi_dll_.xlSetTimerRate
 xlSetTimerRate.restype = XLstatus
@@ -5952,6 +6213,35 @@ xlSetTimerRate.argtypes = [
     XLulong,
 ]
 xlSetTimerRate.errcheck = check_xl_status
+xlSetTimerRate.__doc__ = """
+xlapi.xlSetTimerRate
+    This function sets the rate for the port‘s cyclic timer events. The
+    resolution of timeRate is 10 μs, but the internal step width is 1000 μs.
+    Values less than multiples of 1000 μs will be rounded down (truncated)
+    to the next closest value. Examples:
+        timerRate = 105: 1050 μs → 1000 μs
+        timerRate = 140: 1400 μs → 1000 μs
+        timerRate = 240: 2400 μs → 2000 μs
+        timerRate = 250: 2500 μs → 2000 μs
+    The minimum timer rate value is 1000 μs (timerRate = 100). If more than
+    one app uses the timer events the lowest value will be used for all.
+    Example:
+        Application 1 timerRate = 150 (1000 μs)
+        Application 2 timerRate = 350 (3000 μs)
+        Used timer rate → 1000 μs
+Syntax:
+    XLstatus xlSetTimerRate(
+        XLportHandle portHandle
+        unsigned long timerRate
+    )
+Args:
+    portHandle: The port handle retrieved by xlOpenPort
+    timerRate: Value specifying the interval for cyclic timer events
+               generated by a port. If 0 is passed, no cyclic timer
+               events are generated.
+Returns:
+    XLstatus (error code)
+"""
 
 xlSetTimerRateAndChannel = _vector_xlapi_dll_.xlSetTimerRateAndChannel
 xlSetTimerRateAndChannel.restype = XLstatus
@@ -5964,6 +6254,42 @@ xlSetTimerRateAndChannel.argtypes = [
     ctypes.POINTER(XLulong),
 ]
 xlSetTimerRateAndChannel.errcheck = check_xl_status
+xlSetTimerRateAndChannel.__doc__ = """
+xlapi.xlSetTimerRateAndChannel
+    This function sets the rate for the port‘s cyclic timer events. The
+    resolution is 10 μs (timerRate of 1 means 10 μs, a timerRate of 10 means
+    100 μs). The minimum and maximum timerRate values depend on the hardware.
+    If a value is outside of the allowable range the limit value is used.
+    Only deterministic values according to the following list can be used.
+    Other values will be rounded to the next faster timer rate.
+      - CAN/LIN
+        Minimum timerRate: 250 μs
+        Discrete timerRate values: 250 μs + x * 250 μs
+      - FlexRay (USB)
+        Minimum timerRate: 250 μs
+        Discrete timerRate values: 250 μs + x * 50 μs
+      - FlexRay (PCI)
+        Minimum timerRate: 100 μs
+        Discrete timerRate values: 100 μs + x * 50 μs
+Syntax:
+    XLstatus xlSetTimerRateAndChannel(
+        XLportHandle portHandle
+        XLaccess *timerChannelMask
+        unsigned long *timerRate
+    )
+Args:
+    portHandle: The port handle retrieved by xlOpenPort
+    timerChannelMask: A mask specifying the channels, at which the timer
+                      events may be generated. Please note that the driver
+                      selects the best suitable (accurate) channel of the
+                      entire channel mask for timer event generation. This
+                      selected channel is returned in timerChannelMask.
+    timerRate: Value specifying the interval for cyclic timer events
+               generated by a port. If 0 is passed, no cyclic timer
+               events are generated.
+Returns:
+    XLstatus (error code)
+"""
 
 xlResetClock = _vector_xlapi_dll_.xlResetClock
 xlResetClock.restype = XLstatus
@@ -5972,6 +6298,16 @@ xlResetClock.argtypes = [
     XLportHandle,
 ]
 xlResetClock.errcheck = check_xl_status
+xlResetClock.__doc__ = """
+xlapi.xlResetClock
+    This function resets the time stamps(nanoseconds) for the specified port.
+Syntax:
+    XLstatus xlResetClock(XLportHandle portHandle)
+Args:
+    portHandle: The port handle retrieved by xlOpenPort
+Returns:
+    XLstatus (error code)
+"""
 
 xlSetNotification = _vector_xlapi_dll_.xlSetNotification
 xlSetNotification.restype = XLstatus
@@ -5984,6 +6320,43 @@ xlSetNotification.argtypes = [
     ctypes.c_int,
 ]
 xlSetNotification.errcheck = check_xl_status
+xlSetNotification.__doc__ = """
+xlapi.xlSetNotification
+    This function sets the queue level for notifications on the receive queue
+    of the given port and returns the notification handle for that queue.
+    This notification handle is an auto-resetting Windows event and remains
+    valid until the port is closed. The app may pass this handle to the
+    Windows WaitForSingleObject() or WaitForMultipleObjects() functions to
+    await incoming driver events. For each event, the driver signals
+    the Windows event if the resulting receive queue level >= the queue level
+    set by this function. Whether the queue level is evaluated in bytes or
+    number of events depends on the port(rxQueueSize). Passing queueLevel=1
+    therefore instructs the driver to signal the event as soon as the receive
+    queue is not empty anymore.
+    Windows events have a signaled/non-signaled state but are not counting.
+    WaitForSingleObject() and WaitForMultipleObjects() block the calling
+    thread until the Windows event reaches the signaled state and reset the
+    event to the non-signaled state when the thread execution continues.
+    Multiple driver events might have been inserted before the Windows event
+    was reset. To ensure that all incoming driver events are eventually
+    processed, the thread must consequently call the ports receive function
+    in a loop until the receive function returns XL_ERR_QUEUE_IS_EMPTY before
+    waiting again.
+Syntax:
+    XLstatus xlSetNotification(
+        XLportHandle portHandle,
+        XLhandle *handle,
+        int queueLevel
+    )
+Args:
+    portHandle: The port handle retrieved by xlOpenPort
+    handle: Pointer to a WIN32 event handle
+    queueLevel: Queue level in number of events or number of bytes to set on
+                the queue. For LIN, this is fixed to 1. For other bus types,
+                1 is the recommended value.
+Returns:
+    XLstatus (error code)
+"""
 
 xlSetTimerBasedNotify = _vector_xlapi_dll_.xlSetTimerBasedNotify
 xlSetTimerBasedNotify.restype = XLstatus
@@ -5994,6 +6367,21 @@ xlSetTimerBasedNotify.argtypes = [
     ctypes.POINTER(XLhandle),
 ]
 xlSetTimerBasedNotify.errcheck = check_xl_status
+xlSetTimerBasedNotify.__doc__ = """
+xlapi.xlSetTimerBasedNotify
+    This function sets an event to notify the application based on the
+    timerrate set by xlSetTimerRate/xlSetTimerRateAndChannel.
+Syntax:
+    xlSetTimerBasedNotify(
+        XLportHandle portHandle, 
+        XLhandle     *pHandle
+    )
+Args:
+    portHandle: The port handle retrieved by xlOpenPort
+    pHandle: Points to the event handle for the notification
+Returns:
+    XLstatus (error code)
+"""
 
 xlFlushReceiveQueue = _vector_xlapi_dll_.xlFlushReceiveQueue
 xlFlushReceiveQueue.restype = XLstatus
@@ -6002,6 +6390,16 @@ xlFlushReceiveQueue.argtypes = [
     XLportHandle,
 ]
 xlFlushReceiveQueue.errcheck = check_xl_status
+xlFlushReceiveQueue.__doc__ = """
+xlapi.xlFlushReceiveQueue
+    This function flushes the port‘s receive queue.
+Syntax:
+    XLstatus xlFlushReceiveQueue(XLportHandle portHandle)
+Args:
+    portHandle: The port handle retrieved by xlOpenPort
+Returns:
+    XLstatus (error code)
+"""
 
 xlGetReceiveQueueLevel = _vector_xlapi_dll_.xlGetReceiveQueueLevel
 xlGetReceiveQueueLevel.restype = XLstatus
@@ -6012,6 +6410,23 @@ xlGetReceiveQueueLevel.argtypes = [
     ctypes.POINTER(ctypes.c_int),
 ]
 xlGetReceiveQueueLevel.errcheck = check_xl_status
+xlGetReceiveQueueLevel.__doc__ = """
+xlapi.xlGetReceiveQueueLevel
+    This function reads the number of events or number of bytes currently in
+    use in a port's receive queue. Applications can use this value to compare
+    the actual queue usage to the allocated size (rxQueueSize).
+Syntax:
+    XLstatus xlGetReceiveQueueLevel (
+        XLportHandle portHandle,
+        int *level
+    )
+Args:
+    portHandle: The port handle retrieved by xlOpenPort
+    level: Pointer to an int that receives the actual count of events or
+           bytes. The value depends on the bus type.
+Returns:
+    XLstatus (error code)
+"""
 
 xlActivateChannel = _vector_xlapi_dll_.xlActivateChannel
 xlActivateChannel.restype = XLstatus
@@ -6026,6 +6441,27 @@ xlActivateChannel.argtypes = [
     ctypes.c_uint,
 ]
 xlActivateChannel.errcheck = check_xl_status
+xlActivateChannel.__doc__ = """
+xlapi.xlActivateChannel
+    This function 'goes on bus' for the selected port and channels. At this
+    point, the user can transmit and receive messages on the bus.
+Syntax:
+    XLstatus xlActivateChannel(
+        XLportHandle portHandle,
+        XLaccess accessMask,
+        unsigned int busType,
+        unsigned int flags
+    )
+Args:
+    portHandle: The port handle retrieved by xlOpenPort
+    accessMask: The access mask specifies the channels to be accessed.
+    busType: Bus type that has been used for opening the port (XL_BUS_TYPE)
+    flags: Additional flags for activating the channels:
+            - XL_ACTIVATE_RESET_CLOCK: Resets internal clock after activation
+            - XL_ACTIVATE_NONE
+Returns:
+    XLstatus (error code)
+"""
 
 xlReceive = _vector_xlapi_dll_.xlReceive
 xlReceive.restype = XLstatus
@@ -6038,6 +6474,29 @@ xlReceive.argtypes = [
     ctypes.POINTER(XLevent),
 ]
 xlReceive.errcheck = check_xl_status
+xlReceive.__doc__ = """
+xlapi.xlReceive
+    This function Reads the received events from the message queue.
+    Supported bus types: CAN, LIN, K-Line, DAIO
+    An application should read all available messages to be sure to re-enable
+    the event. An overrun of the receive queue can be determined by the
+    message flag XL_EVENT_FLAG_OVERRUN in XLevent.flags.
+Syntax:
+    XLstatus xlReceive (
+        XLportHandle portHandle,
+        unsigned int *pEventCount,
+        XLevent *pEventList
+    )
+Args:
+    portHandle: The port handle retrieved by xlOpenPort
+    pEventCount: Pointer to an event counter. On input, the variable must be
+                 set to the size (in messages) of the received buffer. On
+                 output, it contains the number of received messages.
+    pEventList: Pointer to the allocated receive event buffer. The buffer
+                must be large enough to hold the requested messages.
+Returns:
+    XLstatus (error code)
+"""
 
 xlGetErrorString = _vector_xlapi_dll_.xlGetErrorString
 xlGetErrorString.restype = XLstringType
@@ -6059,7 +6518,16 @@ xlCanGetEventString.argtypes = [
     #pEv
     ctypes.POINTER(XLcanRxEvent),
 ]
-
+xlCanGetEventString.__doc__ = """
+xlapi.xlCanGetEventString
+    This function returns a string based on the passed CAN Rx event data.
+Syntax:
+    XLstringType xlCanGetEventString (XLcanRxEvent *pEv)
+Args:
+    pEv: Points the CAN Rx event buffer to be parsed (XLcanRxEvent)
+Returns:
+    XLstringType (Event String)
+"""
 
 xlOemContact = _vector_xlapi_dll_.xlOemContact
 xlOemContact.restype = XLstatus
@@ -6074,6 +6542,21 @@ xlOemContact.argtypes = [
     ctypes.POINTER(XLuint64),
 ]
 xlOemContact.errcheck = check_xl_status
+xlOemContact.__doc__ = """
+xlapi.xlOemContact
+    No description available.
+Syntax:
+    XLstatus xlOemContact(
+        XLportHandle portHandle,
+        XLulong Channel,
+        XLuint64 context1,
+        XLuint64 *context2
+    )
+Args:
+    portHandle: The port handle retrieved by xlOpenPort
+Returns:
+    XLstatus (error code)
+"""
 
 xlGetSyncTime = _vector_xlapi_dll_.xlGetSyncTime
 xlGetSyncTime.restype = XLstatus
@@ -6084,6 +6567,20 @@ xlGetSyncTime.argtypes = [
     ctypes.POINTER(XLuint64),
 ]
 xlGetSyncTime.errcheck = check_xl_status
+xlGetSyncTime.__doc__ = """
+xlapi.xlGetSyncTime
+    This function returns the current high precision PC time (in ns).
+Syntax:
+    XLstatus xlGetSyncTime (
+        XlportHandle portHandle,
+        XLuint64 *time
+    )
+Args:
+    portHandle: The port handle retrieved by xlOpenPort
+    time: A variable that receives the sync time
+Returns:
+    XLstatus (error code)
+"""
 
 xlGetChannelTime = _vector_xlapi_dll_.xlGetChannelTime
 xlGetChannelTime.restype = XLstatus
@@ -6096,6 +6593,23 @@ xlGetChannelTime.argtypes = [
     ctypes.POINTER(XLuint64),
 ]
 xlGetChannelTime.errcheck = check_xl_status
+xlGetChannelTime.__doc__ = """
+xlapi.xlGetChannelTime
+    This function is available only on VN8900 devices and returns the 64 bit
+    PC-based card time.
+Syntax:
+    xlGetChannelTime(
+        XLportHandle portHandle,
+        XLaccess accessMask,
+        XLuint64 *pChannelTime
+    )
+Args:
+    portHandle: The port handle retrieved by xlOpenPort
+    accessMask: The access mask specifies the channels to be accessed
+    pChannelTime: 64 bit PC-based card time
+Returns:
+    XLstatus (error code)
+"""
 
 xlGenerateSyncPulse = _vector_xlapi_dll_.xlGenerateSyncPulse
 xlGenerateSyncPulse.restype = XLstatus
@@ -6106,6 +6620,23 @@ xlGenerateSyncPulse.argtypes = [
     XLaccess,
 ]
 xlGenerateSyncPulse.errcheck = check_xl_status
+xlGenerateSyncPulse.__doc__ = """
+xlapi.xlGenerateSyncPulse
+    This function generates a sync pulse at the hardware synchronization line
+    (hardware party line) with a maximum frequency of 10 Hz. It is only
+    allowed to generate a sync pulse at one channel and at one device at the
+    same time.
+Syntax:
+    XLstatus xlGenerateSyncPulse (
+        XlportHandle portHandle,
+        XLaccess accessMask
+    )
+Args:
+    portHandle: The port handle retrieved by xlOpenPort
+    accessMask: The access mask specifies the channels to be accessed
+Returns:
+    XLstatus (error code)
+"""
 
 xlPopupHwConfig = _vector_xlapi_dll_.xlPopupHwConfig
 xlPopupHwConfig.restype = XLstatus
@@ -6116,6 +6647,22 @@ xlPopupHwConfig.argtypes = [
     ctypes.c_uint,
 ]
 xlPopupHwConfig.errcheck = check_xl_status
+xlPopupHwConfig.__doc__ = """
+xlapi.xlPopupHwConfig
+    Call this function to pop up the Vector Hardware Config tool.
+Syntax:
+    XLstatus xlPopupHwConfig(
+        char *callSign,
+        unsigned int waitForFinish
+    )
+Args:
+    callSign: Reserved type.
+    waitForFinish: Timeout (for the app) to wait for the user entry within
+                   Vector Hardware Config in milliseconds.
+                   0: The application does not wait.
+Returns:
+    XLstatus (error code)
+"""
 
 xlDeactivateChannel = _vector_xlapi_dll_.xlDeactivateChannel
 xlDeactivateChannel.restype = XLstatus
@@ -6126,6 +6673,21 @@ xlDeactivateChannel.argtypes = [
     XLaccess,
 ]
 xlDeactivateChannel.errcheck = check_xl_status
+xlDeactivateChannel.__doc__ = """
+xlapi.xlDeactivateChannel
+    The selected channels 'goes off the bus'. The channels are deactivated if
+    there is no further port that activates the channels.
+Syntax:
+    XLstatus xlDeactivateChannel(
+        XlportHandle portHandle,
+        XLaccess accessMask
+    )
+Args:
+    portHandle: The port handle retrieved by xlOpenPort
+    accessMask: The access mask specifies the channels to be accessed
+Returns:
+    XLstatus (error code)
+"""
 
 xlClosePort = _vector_xlapi_dll_.xlClosePort
 xlClosePort.restype = XLstatus
@@ -6134,6 +6696,16 @@ xlClosePort.argtypes = [
     XLportHandle,
 ]
 xlClosePort.errcheck = check_xl_status
+xlClosePort.__doc__ = """
+xlapi.xlClosePort
+    This function closes a port and deactivates its channels.
+Syntax:
+    XLstatus xlClosePort (XLportHandle portHandle)
+Args:
+    portHandle: The port handle retrieved by xlOpenPort
+Returns:
+    XLstatus (error code)
+"""
 
 xlCanFlushTransmitQueue = _vector_xlapi_dll_.xlCanFlushTransmitQueue
 xlCanFlushTransmitQueue.restype = XLstatus
@@ -6144,6 +6716,22 @@ xlCanFlushTransmitQueue.argtypes = [
     XLaccess,
 ]
 xlCanFlushTransmitQueue.errcheck = check_xl_status
+xlCanFlushTransmitQueue.__doc__ = """
+xlapi.xlCanFlushTransmitQueue
+    The function flushes the transmit queues of the selected channels. This
+    function is only supported by XL family devices. On newer devices, this
+    function performs no operation and returns XL_SUCCESS.
+Syntax:
+    XLstatus xlCanFlushTransmitQueue(
+        XLportHandle portHandle,
+        XLaccess accessMask
+    )
+Args:
+    portHandle: The port handle retrieved by xlOpenPort
+    accessMask: The access mask specifies the channels to be accessed
+Returns:
+    XLstatus (error code)
+"""
 
 xlCanSetChannelOutput = _vector_xlapi_dll_.xlCanSetChannelOutput
 xlCanSetChannelOutput.restype = XLstatus
@@ -6156,6 +6744,25 @@ xlCanSetChannelOutput.argtypes = [
     ctypes.c_int,
 ]
 xlCanSetChannelOutput.errcheck = check_xl_status
+xlCanSetChannelOutput.__doc__ = """
+xlapi.xlCanSetChannelOutput
+    If mode is XL_OUTPUT_MODE.SILENT the CAN chip will not generate any
+    acknowledges when a CAN message is received. It is not possible to
+    transmit messages, but they can be received in the silent mode. If this
+    function is not called, NORMAL mode is the default.
+Syntax:
+    Xlstatus xlCanSetChannelOutput (
+        XLportHandle portHandle,
+        XLaccess accessMask,
+        unsigned char mode
+    )
+Args:
+    portHandle: The port handle retrieved by xlOpenPort
+    accessMask: The access mask specifies the channels to be accessed
+    mode: Specifies the output mode of the CAN chip
+Returns:
+    XLstatus (error code)
+"""
 
 xlCanSetChannelMode = _vector_xlapi_dll_.xlCanSetChannelMode
 xlCanSetChannelMode.restype = XLstatus
@@ -6170,6 +6777,34 @@ xlCanSetChannelMode.argtypes = [
     ctypes.c_int,
 ]
 xlCanSetChannelMode.errcheck = check_xl_status
+xlCanSetChannelMode.__doc__ = """
+xlapi.xlCanSetChannelMode
+    This function specifies whether the caller will get a Tx and/or a TxRq
+    receipt for transmitted messages (for CAN channels defined by
+    accessMask). The default is TxRq deactivated and Tx activated.
+Syntax:
+    Xlstatus xlCanSetChannelMode (
+        XLportHandle portHandle,
+        XLaccess accessMask,
+        int tx,
+        int txrq
+    )
+Args:
+    portHandle: The port handle retrieved by xlOpenPort
+    accessMask: The access mask specifies the channels to be accessed
+    tx: A flag specifying whether the channel should generate receipts when a
+        message is transmitted by the CAN chip (sets
+        XL_CAN_MSG_FLAG.TX_COMPLETED)
+        - 1 = generate receipts
+        - 0 = deactivated
+    txrq: A flag specifying whether the channel should generate receipts when
+          a message is ready for transmission by the CAN chip (sets
+          XL_CAN_MSG_FLAG.TX_REQUEST)
+          - 1 = generate receipts
+          - 0 = deactivated.
+Returns:
+    XLstatus (error code)
+"""
 
 xlCanSetReceiveMode = _vector_xlapi_dll_.xlCanSetReceiveMode
 xlCanSetReceiveMode.restype = XLstatus
@@ -6182,6 +6817,23 @@ xlCanSetReceiveMode.argtypes = [
     ctypes.c_ubyte,
 ]
 xlCanSetReceiveMode.errcheck = check_xl_status
+xlCanSetReceiveMode.__doc__ = """
+xlapi.xlCanSetReceiveMode
+    Suppresses error frames and chipstate events with '1', but allows those
+    with '0'. Error frames and chipstate events are allowed by default.
+Syntax:
+    XLstatus xlCanSetReceiveMode (
+        XLportHandle portHandle,
+        unsigned char ErrorFrame,
+        unsigned char ChipState
+    )
+Args:
+    portHandle: The port handle retrieved by xlOpenPort
+    ErrorFrame: Suppresses error frames
+    ChipState: Suppresses chipstate events
+Returns:
+    XLstatus (error code)
+"""
 
 xlCanSetChannelTransceiver = _vector_xlapi_dll_.xlCanSetChannelTransceiver
 xlCanSetChannelTransceiver.restype = XLstatus
@@ -6198,6 +6850,28 @@ xlCanSetChannelTransceiver.argtypes = [
     ctypes.c_int,
 ]
 xlCanSetChannelTransceiver.errcheck = check_xl_status
+xlCanSetChannelTransceiver.__doc__ = """
+xlapi.xlCanSetChannelTransceiver
+    This function is used to set the transceiver modes. The possible
+    transceiver modes depend on the transceiver type connected to the
+    hardware. The port must have init access.
+Syntax:
+    XLstatus xlCanSetChannelTransceiver(
+        XLportHandle portHandle,
+        XLaccess accessMask,
+        int type,
+        int lineMode,
+        int resNet
+    )
+Args:
+    portHandle: The port handle retrieved by xlOpenPort
+    accessMask: The access mask specifies the channels to be accessed
+    type: the type of transceiver(XL_TRANSCEIVER_TYPE)
+    lineMode: the linemode of transceiver(XL_TRANSCEIVER_LINEMODE)
+    resNet: reserved, set to 0
+Returns:
+    XLstatus (error code)
+"""
 
 xlCanSetChannelParams = _vector_xlapi_dll_.xlCanSetChannelParams
 xlCanSetChannelParams.restype = XLstatus
@@ -6210,6 +6884,24 @@ xlCanSetChannelParams.argtypes = [
     ctypes.POINTER(XLchipParams),
 ]
 xlCanSetChannelParams.errcheck = check_xl_status
+xlCanSetChannelParams.__doc__ = """
+xlapi.xlCanSetChannelParams
+    This function initializes the channels defined by accessMask with the
+    given parameters. In order to call this function the port must have init
+    access and the selected channels must be deactivated.
+Syntax:
+    XLstatus xlCanSetChannelParams (
+        XLportHandle portHandle,
+        XLaccess accessMask,
+        XLchipParams *pChipParams
+    )
+Args:
+    portHandle: The port handle retrieved by xlOpenPort
+    accessMask: The access mask specifies the channels to be accessed
+    pChipParams: Pointer to an array of chip parameters
+Returns:
+    XLstatus (error code)
+"""
 
 xlCanSetChannelParamsC200 = _vector_xlapi_dll_.xlCanSetChannelParamsC200
 xlCanSetChannelParamsC200.restype = XLstatus
@@ -6224,6 +6916,26 @@ xlCanSetChannelParamsC200.argtypes = [
     ctypes.c_ubyte,
 ]
 xlCanSetChannelParamsC200.errcheck = check_xl_status
+xlCanSetChannelParamsC200.__doc__ = """
+xlapi.xlCanSetChannelParamsC200
+    This function initializes the channels defined by accessMask with the
+    given parameters. In order to call this function, the port must have init
+    access and the selected channels must be deactivated.
+Syntax:
+    XLstatus xlCanSetChannelParamsC200 (
+        XLportHandle portHandle,
+        XLaccess accessMask,
+        unsigned char btr0,
+        unsigned char btr1
+    )
+Args:
+    portHandle: The port handle retrieved by xlOpenPort
+    accessMask: The access mask specifies the channels to be accessed
+    btr0: BTRO value for a C200 or 527 compatible controllers
+    btr1: BTR1 value for a C200 or 527 compatible controllers
+Returns:
+    XLstatus (error code)
+"""
 
 xlCanSetChannelBitrate = _vector_xlapi_dll_.xlCanSetChannelBitrate
 xlCanSetChannelBitrate.restype = XLstatus
@@ -6236,6 +6948,23 @@ xlCanSetChannelBitrate.argtypes = [
     XLulong,
 ]
 xlCanSetChannelBitrate.errcheck = check_xl_status
+xlCanSetChannelBitrate.__doc__ = """
+xlapi.xlCanSetChannelBitrate
+    This function provides a simple way to specify the bit rate. The sample
+    point is about 69 % (SJW=1, samples=1).
+Syntax:
+    XLstatus xlCanSetChannelBitrate (
+        XLportHandle portHandle,
+        XLaccess accessMask,
+        unsigned long bitrate
+    )
+Args:
+    portHandle: The port handle retrieved by xlOpenPort
+    accessMask: The access mask specifies the channels to be accessed
+    bitrate: Bit rate in BPS (range 15000 … 1000000)
+Returns:
+    XLstatus (error code)
+"""
 
 xlCanFdSetConfiguration = _vector_xlapi_dll_.xlCanFdSetConfiguration
 xlCanFdSetConfiguration.restype = XLstatus
@@ -6248,6 +6977,25 @@ xlCanFdSetConfiguration.argtypes = [
     ctypes.POINTER(XLcanFdConf),
 ]
 xlCanFdSetConfiguration.errcheck = check_xl_status
+xlCanFdSetConfiguration.__doc__ = """
+xlapi.xlCanFdSetConfiguration
+    This function sets up a CAN FD channel. The structure differs between the
+    arbitration part and the data part of a CAN message. To call this
+    function the port must have init access.
+Syntax:
+    XLstatus xlCanFdSetConfiguration (
+        XLportHandle portHandle,
+        Xlaccess accessMask,
+        XLcanFdConf *pCanFdConf
+    )
+Args:
+    portHandle: The port handle retrieved by xlOpenPort
+    accessMask: The access mask specifies the channels to be accessed
+    pCanFdConf: Points to the CAN FD configuration structure to set up a
+                CAN FD channel (XLcanFdConf)
+Returns:
+    XLstatus (error code)
+"""
 
 xlCanReceive = _vector_xlapi_dll_.xlCanReceive
 xlCanReceive.restype = XLstatus
@@ -6258,6 +7006,20 @@ xlCanReceive.argtypes = [
     ctypes.POINTER(XLcanRxEvent),
 ]
 xlCanReceive.errcheck = check_xl_status
+xlCanReceive.__doc__ = """
+xlapi.xlCanReceive
+    The function receives the CAN FD messages on the selected port.
+Syntax:
+    XLstatus xlCanReceive(
+        XLportHandle portHandle,
+        XLcanRxEvent *pXlCanRxEvt
+    )
+Args:
+    portHandle: The port handle retrieved by xlOpenPort
+    pXLCanRxEvt: Pointer to the allocated receive event buffer (XLcanRxEvent)
+Returns:
+    XLstatus (error code)
+"""
 
 xlCanTransmitEx = _vector_xlapi_dll_.xlCanTransmitEx
 xlCanTransmitEx.restype = XLstatus
@@ -6274,6 +7036,28 @@ xlCanTransmitEx.argtypes = [
     ctypes.POINTER(XLcanTxEvent),
 ]
 xlCanTransmitEx.errcheck = check_xl_status
+xlCanTransmitEx.__doc__ = """
+xlapi.xlCanTransmitEx
+    The function transmits CAN FD messages on the selected channels. It is
+    possible to transmit more messages with only one function call.
+Syntax:
+    XLstatus xlCanTransmitEx (
+        XLportHandle portHandle,
+        Xlaccess accessMask,
+        unsigned int msgCnt,
+        unsigned int *pMsgCntSent,
+        XLcanTxEvent *pXlCanTxEvt
+    )
+Args:
+    portHandle: The port handle retrieved by xlOpenPort
+    accessMask: The access mask specifies the channels to be accessed
+    msgCnt: Amount of messages to be transmitted by the user
+    pMsgCntSent: Amount of messages which were actually transmitted
+    pXlCanTxEvt: Buffer with messages to be transmitted (XLcanTxEvent),
+                 buffer must have at least the size of msgCnt
+Returns:
+    XLstatus (error code)
+"""
 
 xlCanSetChannelAcceptance = _vector_xlapi_dll_.xlCanSetChannelAcceptance
 xlCanSetChannelAcceptance.restype = XLstatus
@@ -6290,6 +7074,58 @@ xlCanSetChannelAcceptance.argtypes = [
     ctypes.c_uint,
 ]
 xlCanSetChannelAcceptance.errcheck = check_xl_status
+xlCanSetChannelAcceptance.__doc__ = """
+xlapi.xlCanSetChannelAcceptance
+    A filter lets messages pass. Different ports may have different filters
+    for a channel. If the CAN hardware cannot implement the filter, the
+    driver virtualizes filtering. However, in some configurations with
+    multiple ports, the application will receive messages although it has
+    installed a filter blocking those message IDs.
+
+    Accept if (id ^ code) & mask == 0.
+    Note: By default, all IDs are accepted. Generally, modern computers are
+    fast enough to receive all CAN messages. Therefore, it is recommended
+    that the application implements filtering with its own logic. For
+    standard IDs, xlCanAddAcceptanceRange/xlCanRemoveAcceptanceRange provide
+    a more flexible interface to configure filters.
+-------------------------------------------------------------------
+|      | IDs               | mask       | code       | idRange    |
+-------------------------------------------------------------------
+| Std. | Open for all IDs  | 0x000      |0x000       | XL_CAN_STD |
+-------------------------------------------------------------------
+|      | Open for ID 1,    | 0x7FF      | 0x001      | XL_CAN_STD |
+|      | ID=0x001|         |            |            |            |
+-------------------------------------------------------------------
+|      | Close for all IDs | 0xFFF      | 0xFFF      | XL_CAN_STD |
+-------------------------------------------------------------------
+-------------------------------------------------------------------
+| Ext. | Open for all IDs  | 0x000      | 0x000      | XL_CAN_EXT |
+-------------------------------------------------------------------
+|      | Open for ID 1,    | 0x1FFFFFFF | 0x001      | XL_CAN_EXT |
+|      | ID=0x80000001     |            |            |            |
+-------------------------------------------------------------------
+|      | Close for all IDs | 0xFFFFFFFF | 0xFFFFFFFF | XL_CAN_EXT |
+-------------------------------------------------------------------
+
+Syntax:
+    XLstatus xlCanSetChannelAcceptance(
+        XlportHandle portHandle,
+        XLaccess accessMask,
+        unsigned long code,
+        unsigned long mask,
+        unsigned int idRange
+    )
+Args:
+    portHandle: The port handle retrieved by xlOpenPort
+    accessMask: The access mask specifies the channels to be accessed
+    code: The acceptance code for id filtering
+    mask: The acceptance mask for id filtering, bit = 1 means relevant
+    idRange: To distinguish between standard or extended identifiers:
+               - XL_CAN_STD
+               - XL_CAN_EXT
+Returns:
+    XLstatus (error code)
+"""
 
 xlCanAddAcceptanceRange = _vector_xlapi_dll_.xlCanAddAcceptanceRange
 xlCanAddAcceptanceRange.restype = XLstatus
@@ -6304,6 +7140,27 @@ xlCanAddAcceptanceRange.argtypes = [
     XLulong,
 ]
 xlCanAddAcceptanceRange.errcheck = check_xl_status
+xlCanAddAcceptanceRange.__doc__ = """
+xlapi.xlCanAddAcceptanceRange
+    This function sets the filter for accepted standard IDs and can be called
+    several times to open multiple ID windows. Different ports may have
+    different filters for a channel. If the CAN hardware cannot implement the
+    filter, the driver virtualizes filtering.
+Syntax:
+    XLstatus xlCanAddAcceptanceRange(
+        XLportHandle portHandle,
+        XLaccess accessMask,
+        unsigned long first_id,
+        unsigned long last_id
+    )
+Args:
+    portHandle: The port handle retrieved by xlOpenPort
+    accessMask: The access mask specifies the channels to be accessed
+    first_id: First ID to pass acceptance filter
+    last_id: Last ID to pass acceptance filter
+Returns:
+    XLstatus (error code)
+"""
 
 xlCanRemoveAcceptanceRange = _vector_xlapi_dll_.xlCanRemoveAcceptanceRange
 xlCanRemoveAcceptanceRange.restype = XLstatus
@@ -6318,6 +7175,27 @@ xlCanRemoveAcceptanceRange.argtypes = [
     XLulong,
 ]
 xlCanRemoveAcceptanceRange.errcheck = check_xl_status
+xlCanRemoveAcceptanceRange.__doc__ = """
+xlapi.xlCanRemoveAcceptanceRange
+    The specified IDs will not pass the acceptance filter. The range of the
+    acceptance filter can be removed several times. Different ports may have
+    different filters for a channel. If the CAN hardware cannot implement the
+    filter, the driver virtualizes filtering.
+Syntax:
+    XLstatus xlCanRemoveAcceptanceRange(
+        XLportHandle portHandle,
+        XLaccess accessMask,
+        unsigned long first_id,
+        unsigned long last_id
+    )
+Args:
+    portHandle: The port handle retrieved by xlOpenPort
+    accessMask: The access mask specifies the channels to be accessed
+    first_id: First ID to remove
+    last_id: Last ID to remove (inclusive)
+Returns:
+    XLstatus (error code)
+"""
 
 xlCanResetAcceptance = _vector_xlapi_dll_.xlCanResetAcceptance
 xlCanResetAcceptance.restype = XLstatus
@@ -6330,6 +7208,22 @@ xlCanResetAcceptance.argtypes = [
     ctypes.c_uint,
 ]
 xlCanResetAcceptance.errcheck = check_xl_status
+xlCanResetAcceptance.__doc__ = """
+xlapi.xlCanResetAcceptance
+    Resets the acceptance filter.
+Syntax:
+    XLstatus xlCanResetAcceptance (
+        XLportHandle portHandle,
+        XLaccess accessMask,
+        unsigned int idRange
+    )
+Args:
+    portHandle: The port handle retrieved by xlOpenPort
+    accessMask: The access mask specifies the channels to be accessed
+    idRange: To distinguish between standard or extended identifiers
+Returns:
+    XLstatus (error code)
+"""
 
 xlCanRequestChipState = _vector_xlapi_dll_.xlCanRequestChipState
 xlCanRequestChipState.restype = XLstatus
@@ -6340,6 +7234,22 @@ xlCanRequestChipState.argtypes = [
     XLaccess,
 ]
 xlCanRequestChipState.errcheck = check_xl_status
+xlCanRequestChipState.__doc__ = """
+xlapi.xlCanRequestChipState
+    This function requests a CAN controller chipstate for all selected
+    channels. For each channel an XL_CHIPSTATE event can be received by
+    calling xlReceive.
+Syntax:
+    XLstatus xlCanRequestChipState(
+        XlportHandle portHandle,
+        XLaccess accessMask
+    )
+Args:
+    portHandle: The port handle retrieved by xlOpenPort
+    accessMask: The access mask specifies the channels to be accessed
+Returns:
+    XLstatus (error code)
+"""
 
 xlCanTransmit = _vector_xlapi_dll_.xlCanTransmit
 xlCanTransmit.restype = XLstatus
@@ -6354,6 +7264,27 @@ xlCanTransmit.argtypes = [
     ctypes.c_void_p,
 ]
 xlCanTransmit.errcheck = check_xl_status
+xlCanTransmit.__doc__ = """
+xlapi.xlCanTransmit
+    This function transmits CAN messages on the selected channels. It is 
+    possible to transmit more messages with only one function call.
+Syntax:
+    XLstatus xlCanTransmit (
+        XLportHandle portHandle,
+        Xlaccess accessMask,
+        unsigned int *messageCount,
+        void *pMessages
+    )
+Args:
+    portHandle: The port handle retrieved by xlOpenPort
+    accessMask: The access mask specifies the channels to be accessed
+    messageCount: Points to the amount of messages to be transmitted
+                  or returns the number of transmitted messages.
+    pMessages: Points to a user buffer with messages to be transmitted,
+               buffer must have at least the size of messageCount
+Returns:
+    XLstatus (error code)
+"""
 
 xlSetGlobalTimeSync = _vector_xlapi_dll_.xlSetGlobalTimeSync
 xlSetGlobalTimeSync.restype = XLstatus
@@ -6364,6 +7295,23 @@ xlSetGlobalTimeSync.argtypes = [
     ctypes.POINTER(XLulong),
 ]
 xlSetGlobalTimeSync.errcheck = check_xl_status
+xlSetGlobalTimeSync.__doc__ = """
+xlapi.xlSetGlobalTimeSync
+    This function reads/sets the software synchronization setting in the
+    Vector Hardware Config. This setting is written to the registry and read
+    every time when the driver is loaded. To reload the driver of a connected
+    interface, disconnect and reconnect it(or reboot the PC).
+Syntax:
+    XLstatus xlSetGlobalTimeSync (
+        unsigned long newValue,
+        unsigned long *previousValue
+    )
+Args:
+    newValue: XL_SET_TIMESYNC
+    previousValue: Buffer which stores the previous value
+Returns:
+    XLstatus (error code)
+"""
 
 xlCheckLicense = _vector_xlapi_dll_.xlCheckLicense
 xlCheckLicense.restype = XLstatus
@@ -6376,6 +7324,24 @@ xlCheckLicense.argtypes = [
     XLulong,
 ]
 xlCheckLicense.errcheck = check_xl_status
+xlCheckLicense.__doc__ = """
+xlapi.xlCheckLicense
+    It is checked whether the hardware is licensed for the type of
+    application (for all channels). If it isn't licensed, the application
+    should terminate.
+Syntax:
+    xlCheckLicense(
+        XLportHandle portHandle,
+        XLaccess accessMask,
+        XLulong protectionCode
+    )
+Args:
+    portHandle: The port handle retrieved by xlOpenPort
+    accessMask: The access mask specifies the channels to be accessed
+    protectionCode: No information available
+Returns:
+    XLstatus (error code)
+"""
 
 xlGetLicenseInfo = _vector_xlapi_dll_.xlGetLicenseInfo
 xlGetLicenseInfo.restype = XLstatus
@@ -6388,6 +7354,26 @@ xlGetLicenseInfo.argtypes = [
     ctypes.c_uint,
 ]
 xlGetLicenseInfo.errcheck = check_xl_status
+xlGetLicenseInfo.__doc__ = """
+xlapi.xlGetLicenseInfo
+    This function returns an array (type of XLlicenseInfo) with all available
+    licenses from the selected Vector device. The order of available licenses
+    is always the same, since each element with its index is dedicated to a
+    license. Whether a license is available or not can be checked within the
+    related structure.
+Syntax:
+    XLstatus xlGetLicenseInfo(
+        XLaccess channelMask,
+        XLlicenseInfo *pLicInfoArray,
+        unsigned int licInfoArraySize
+    )
+Args:
+    channelMask: The channel mask of the Vector device containing the licenses
+    pLicInfoArray: Pointer to the array to be returned
+    licInfoArraySize: Size of the array
+Returns:
+    XLstatus (error code)
+"""
 
 xlLinSetChannelParams = _vector_xlapi_dll_.xlLinSetChannelParams
 xlLinSetChannelParams.restype = XLstatus
@@ -6400,6 +7386,16 @@ xlLinSetChannelParams.argtypes = [
     XLlinStatPar,
 ]
 xlLinSetChannelParams.errcheck = check_xl_status
+xlLinSetChannelParams.__doc__ = """
+xlapi.xlLinSetChannelParams
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlLinSetDLC = _vector_xlapi_dll_.xlLinSetDLC
 xlLinSetDLC.restype = XLstatus
@@ -6412,6 +7408,16 @@ xlLinSetDLC.argtypes = [
     ctypes.c_ubyte*64,
 ]
 xlLinSetDLC.errcheck = check_xl_status
+xlLinSetDLC.__doc__ = """
+xlapi.xlLinSetDLC
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlLinSetSlave = _vector_xlapi_dll_.xlLinSetSlave
 xlLinSetSlave.restype = XLstatus
@@ -6430,6 +7436,16 @@ xlLinSetSlave.argtypes = [
     ctypes.c_ushort,
 ]
 xlLinSetSlave.errcheck = check_xl_status
+xlLinSetSlave.__doc__ = """
+xlapi.xlLinSetSlave
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlLinSendRequest = _vector_xlapi_dll_.xlLinSendRequest
 xlLinSendRequest.restype = XLstatus
@@ -6444,6 +7460,16 @@ xlLinSendRequest.argtypes = [
     ctypes.c_uint,
 ]
 xlLinSendRequest.errcheck = check_xl_status
+xlLinSendRequest.__doc__ = """
+xlapi.xlLinSendRequest
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlLinSetSleepMode = _vector_xlapi_dll_.xlLinSetSleepMode
 xlLinSetSleepMode.restype = XLstatus
@@ -6458,6 +7484,16 @@ xlLinSetSleepMode.argtypes = [
     ctypes.c_ubyte,
 ]
 xlLinSetSleepMode.errcheck = check_xl_status
+xlLinSetSleepMode.__doc__ = """
+xlapi.xlLinSetSleepMode
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlLinWakeUp = _vector_xlapi_dll_.xlLinWakeUp
 xlLinWakeUp.restype = XLstatus
@@ -6468,6 +7504,16 @@ xlLinWakeUp.argtypes = [
     XLaccess,
 ]
 xlLinWakeUp.errcheck = check_xl_status
+xlLinWakeUp.__doc__ = """
+xlapi.xlLinWakeUp
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlLinSetChecksum = _vector_xlapi_dll_.xlLinSetChecksum
 xlLinSetChecksum.restype = XLstatus
@@ -6480,6 +7526,16 @@ xlLinSetChecksum.argtypes = [
     ctypes.c_ubyte*60,
 ]
 xlLinSetChecksum.errcheck = check_xl_status
+xlLinSetChecksum.__doc__ = """
+xlapi.xlLinSetChecksum
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlLinSwitchSlave = _vector_xlapi_dll_.xlLinSwitchSlave
 xlLinSwitchSlave.restype = XLstatus
@@ -6494,6 +7550,16 @@ xlLinSwitchSlave.argtypes = [
     ctypes.c_ubyte,
 ]
 xlLinSwitchSlave.errcheck = check_xl_status
+xlLinSwitchSlave.__doc__ = """
+xlapi.xlLinSwitchSlave
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlDAIOSetPWMOutput = _vector_xlapi_dll_.xlDAIOSetPWMOutput
 xlDAIOSetPWMOutput.restype = XLstatus
@@ -6508,6 +7574,16 @@ xlDAIOSetPWMOutput.argtypes = [
     ctypes.c_uint,
 ]
 xlDAIOSetPWMOutput.errcheck = check_xl_status
+xlDAIOSetPWMOutput.__doc__ = """
+xlapi.xlDAIOSetPWMOutput
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlDAIOSetDigitalOutput = _vector_xlapi_dll_.xlDAIOSetDigitalOutput
 xlDAIOSetDigitalOutput.restype = XLstatus
@@ -6522,6 +7598,16 @@ xlDAIOSetDigitalOutput.argtypes = [
     ctypes.c_uint,
 ]
 xlDAIOSetDigitalOutput.errcheck = check_xl_status
+xlDAIOSetDigitalOutput.__doc__ = """
+xlapi.xlDAIOSetDigitalOutput
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlDAIOSetAnalogOutput = _vector_xlapi_dll_.xlDAIOSetAnalogOutput
 xlDAIOSetAnalogOutput.restype = XLstatus
@@ -6540,6 +7626,16 @@ xlDAIOSetAnalogOutput.argtypes = [
     ctypes.c_uint,
 ]
 xlDAIOSetAnalogOutput.errcheck = check_xl_status
+xlDAIOSetAnalogOutput.__doc__ = """
+xlapi.xlDAIOSetAnalogOutput
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlDAIORequestMeasurement = _vector_xlapi_dll_.xlDAIORequestMeasurement
 xlDAIORequestMeasurement.restype = XLstatus
@@ -6550,6 +7646,16 @@ xlDAIORequestMeasurement.argtypes = [
     XLaccess,
 ]
 xlDAIORequestMeasurement.errcheck = check_xl_status
+xlDAIORequestMeasurement.__doc__ = """
+xlapi.xlDAIORequestMeasurement
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlDAIOSetDigitalParameters = _vector_xlapi_dll_.xlDAIOSetDigitalParameters
 xlDAIOSetDigitalParameters.restype = XLstatus
@@ -6564,6 +7670,16 @@ xlDAIOSetDigitalParameters.argtypes = [
     ctypes.c_uint,
 ]
 xlDAIOSetDigitalParameters.errcheck = check_xl_status
+xlDAIOSetDigitalParameters.__doc__ = """
+xlapi.xlDAIOSetDigitalParameters
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlDAIOSetAnalogParameters = _vector_xlapi_dll_.xlDAIOSetAnalogParameters
 xlDAIOSetAnalogParameters.restype = XLstatus
@@ -6580,6 +7696,16 @@ xlDAIOSetAnalogParameters.argtypes = [
     ctypes.c_uint,
 ]
 xlDAIOSetAnalogParameters.errcheck = check_xl_status
+xlDAIOSetAnalogParameters.__doc__ = """
+xlapi.xlDAIOSetAnalogParameters
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlDAIOSetAnalogTrigger = _vector_xlapi_dll_.xlDAIOSetAnalogTrigger
 xlDAIOSetAnalogTrigger.restype = XLstatus
@@ -6596,6 +7722,16 @@ xlDAIOSetAnalogTrigger.argtypes = [
     ctypes.c_uint,
 ]
 xlDAIOSetAnalogTrigger.errcheck = check_xl_status
+xlDAIOSetAnalogTrigger.__doc__ = """
+xlapi.xlDAIOSetAnalogTrigger
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlDAIOSetMeasurementFrequency = _vector_xlapi_dll_.xlDAIOSetMeasurementFrequency
 xlDAIOSetMeasurementFrequency.restype = XLstatus
@@ -6608,6 +7744,16 @@ xlDAIOSetMeasurementFrequency.argtypes = [
     ctypes.c_uint,
 ]
 xlDAIOSetMeasurementFrequency.errcheck = check_xl_status
+xlDAIOSetMeasurementFrequency.__doc__ = """
+xlapi.xlDAIOSetMeasurementFrequency
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlDAIOSetDigitalTrigger = _vector_xlapi_dll_.xlDAIOSetDigitalTrigger
 xlDAIOSetDigitalTrigger.restype = XLstatus
@@ -6620,6 +7766,16 @@ xlDAIOSetDigitalTrigger.argtypes = [
     ctypes.c_uint,
 ]
 xlDAIOSetDigitalTrigger.errcheck = check_xl_status
+xlDAIOSetDigitalTrigger.__doc__ = """
+xlapi.xlDAIOSetDigitalTrigger
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlKlineTransmit = _vector_xlapi_dll_.xlKlineTransmit
 xlKlineTransmit.restype = XLstatus
@@ -6634,6 +7790,16 @@ xlKlineTransmit.argtypes = [
     ctypes.POINTER(ctypes.c_ubyte),
 ]
 xlKlineTransmit.errcheck = check_xl_status
+xlKlineTransmit.__doc__ = """
+xlapi.xlKlineTransmit
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlKlineSetUartParams = _vector_xlapi_dll_.xlKlineSetUartParams
 xlKlineSetUartParams.restype = XLstatus
@@ -6646,6 +7812,16 @@ xlKlineSetUartParams.argtypes = [
     ctypes.POINTER(XLklineUartParameter),
 ]
 xlKlineSetUartParams.errcheck = check_xl_status
+xlKlineSetUartParams.__doc__ = """
+xlapi.xlKlineSetUartParams
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlKlineSwitchHighspeedMode = _vector_xlapi_dll_.xlKlineSwitchHighspeedMode
 xlKlineSwitchHighspeedMode.restype = XLstatus
@@ -6658,6 +7834,16 @@ xlKlineSwitchHighspeedMode.argtypes = [
     ctypes.c_uint,
 ]
 xlKlineSwitchHighspeedMode.errcheck = check_xl_status
+xlKlineSwitchHighspeedMode.__doc__ = """
+xlapi.xlKlineSwitchHighspeedMode
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlKlineSwitchTesterResistor = _vector_xlapi_dll_.xlKlineSwitchTesterResistor
 xlKlineSwitchTesterResistor.restype = XLstatus
@@ -6670,6 +7856,16 @@ xlKlineSwitchTesterResistor.argtypes = [
     ctypes.c_uint,
 ]
 xlKlineSwitchTesterResistor.errcheck = check_xl_status
+xlKlineSwitchTesterResistor.__doc__ = """
+xlapi.xlKlineSwitchTesterResistor
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlKlineSetBaudrate = _vector_xlapi_dll_.xlKlineSetBaudrate
 xlKlineSetBaudrate.restype = XLstatus
@@ -6682,6 +7878,16 @@ xlKlineSetBaudrate.argtypes = [
     ctypes.c_uint,
 ]
 xlKlineSetBaudrate.errcheck = check_xl_status
+xlKlineSetBaudrate.__doc__ = """
+xlapi.xlKlineSetBaudrate
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlKlineFastInitTester = _vector_xlapi_dll_.xlKlineFastInitTester
 xlKlineFastInitTester.restype = XLstatus
@@ -6698,6 +7904,16 @@ xlKlineFastInitTester.argtypes = [
     ctypes.POINTER(XLklineInitTester),
 ]
 xlKlineFastInitTester.errcheck = check_xl_status
+xlKlineFastInitTester.__doc__ = """
+xlapi.xlKlineFastInitTester
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlKlineInit5BdTester = _vector_xlapi_dll_.xlKlineInit5BdTester
 xlKlineInit5BdTester.restype = XLstatus
@@ -6710,6 +7926,16 @@ xlKlineInit5BdTester.argtypes = [
     ctypes.POINTER(XLkline5BdTester),
 ]
 xlKlineInit5BdTester.errcheck = check_xl_status
+xlKlineInit5BdTester.__doc__ = """
+xlapi.xlKlineInit5BdTester
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlKlineInit5BdEcu = _vector_xlapi_dll_.xlKlineInit5BdEcu
 xlKlineInit5BdEcu.restype = XLstatus
@@ -6722,6 +7948,16 @@ xlKlineInit5BdEcu.argtypes = [
     ctypes.POINTER(XLkline5BdEcu),
 ]
 xlKlineInit5BdEcu.errcheck = check_xl_status
+xlKlineInit5BdEcu.__doc__ = """
+xlapi.xlKlineInit5BdEcu
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlKlineSetCommunicationTimingTester = _vector_xlapi_dll_.xlKlineSetCommunicationTimingTester
 xlKlineSetCommunicationTimingTester.restype = XLstatus
@@ -6734,6 +7970,16 @@ xlKlineSetCommunicationTimingTester.argtypes = [
     ctypes.POINTER(XLklineSetComTester),
 ]
 xlKlineSetCommunicationTimingTester.errcheck = check_xl_status
+xlKlineSetCommunicationTimingTester.__doc__ = """
+xlapi.xlKlineSetCommunicationTimingTester
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlKlineSetCommunicationTimingEcu = _vector_xlapi_dll_.xlKlineSetCommunicationTimingEcu
 xlKlineSetCommunicationTimingEcu.restype = XLstatus
@@ -6746,6 +7992,16 @@ xlKlineSetCommunicationTimingEcu.argtypes = [
     ctypes.POINTER(XLklineSetComEcu),
 ]
 xlKlineSetCommunicationTimingEcu.errcheck = check_xl_status
+xlKlineSetCommunicationTimingEcu.__doc__ = """
+xlapi.xlKlineSetCommunicationTimingEcu
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostReceive = _vector_xlapi_dll_.xlMostReceive
 xlMostReceive.restype = XLstatus
@@ -6757,6 +8013,16 @@ xlMostReceive.argtypes = [
     ctypes.POINTER(XLmostEvent),
 ]
 xlMostReceive.errcheck = check_xl_status
+xlMostReceive.__doc__ = """
+xlapi.xlMostReceive
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostSwitchEventSources = _vector_xlapi_dll_.xlMostSwitchEventSources
 xlMostSwitchEventSources.restype = XLstatus
@@ -6771,6 +8037,16 @@ xlMostSwitchEventSources.argtypes = [
     ctypes.c_ushort,
 ]
 xlMostSwitchEventSources.errcheck = check_xl_status
+xlMostSwitchEventSources.__doc__ = """
+xlapi.xlMostSwitchEventSources
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostSetAllBypass = _vector_xlapi_dll_.xlMostSetAllBypass
 xlMostSetAllBypass.restype = XLstatus
@@ -6785,6 +8061,16 @@ xlMostSetAllBypass.argtypes = [
     ctypes.c_ubyte,
 ]
 xlMostSetAllBypass.errcheck = check_xl_status
+xlMostSetAllBypass.__doc__ = """
+xlapi.xlMostSetAllBypass
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostGetAllBypass = _vector_xlapi_dll_.xlMostGetAllBypass
 xlMostGetAllBypass.restype = XLstatus
@@ -6797,6 +8083,16 @@ xlMostGetAllBypass.argtypes = [
     XLuserHandle,
 ]
 xlMostGetAllBypass.errcheck = check_xl_status
+xlMostGetAllBypass.__doc__ = """
+xlapi.xlMostGetAllBypass
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostSetTimingMode = _vector_xlapi_dll_.xlMostSetTimingMode
 xlMostSetTimingMode.restype = XLstatus
@@ -6811,6 +8107,16 @@ xlMostSetTimingMode.argtypes = [
     ctypes.c_ubyte,
 ]
 xlMostSetTimingMode.errcheck = check_xl_status
+xlMostSetTimingMode.__doc__ = """
+xlapi.xlMostSetTimingMode
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostGetTimingMode = _vector_xlapi_dll_.xlMostGetTimingMode
 xlMostGetTimingMode.restype = XLstatus
@@ -6823,6 +8129,16 @@ xlMostGetTimingMode.argtypes = [
     XLuserHandle,
 ]
 xlMostGetTimingMode.errcheck = check_xl_status
+xlMostGetTimingMode.__doc__ = """
+xlapi.xlMostGetTimingMode
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostSetFrequency = _vector_xlapi_dll_.xlMostSetFrequency
 xlMostSetFrequency.restype = XLstatus
@@ -6837,6 +8153,16 @@ xlMostSetFrequency.argtypes = [
     ctypes.c_ushort,
 ]
 xlMostSetFrequency.errcheck = check_xl_status
+xlMostSetFrequency.__doc__ = """
+xlapi.xlMostSetFrequency
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostGetFrequency = _vector_xlapi_dll_.xlMostGetFrequency
 xlMostGetFrequency.restype = XLstatus
@@ -6849,6 +8175,16 @@ xlMostGetFrequency.argtypes = [
     XLuserHandle,
 ]
 xlMostGetFrequency.errcheck = check_xl_status
+xlMostGetFrequency.__doc__ = """
+xlapi.xlMostGetFrequency
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostWriteRegister = _vector_xlapi_dll_.xlMostWriteRegister
 xlMostWriteRegister.restype = XLstatus
@@ -6867,6 +8203,16 @@ xlMostWriteRegister.argtypes = [
     ctypes.c_ubyte*16,
 ]
 xlMostWriteRegister.errcheck = check_xl_status
+xlMostWriteRegister.__doc__ = """
+xlapi.xlMostWriteRegister
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostReadRegister = _vector_xlapi_dll_.xlMostReadRegister
 xlMostReadRegister.restype = XLstatus
@@ -6883,6 +8229,16 @@ xlMostReadRegister.argtypes = [
     ctypes.c_ubyte,
 ]
 xlMostReadRegister.errcheck = check_xl_status
+xlMostReadRegister.__doc__ = """
+xlapi.xlMostReadRegister
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostWriteRegisterBit = _vector_xlapi_dll_.xlMostWriteRegisterBit
 xlMostWriteRegisterBit.restype = XLstatus
@@ -6901,6 +8257,16 @@ xlMostWriteRegisterBit.argtypes = [
     ctypes.c_ubyte,
 ]
 xlMostWriteRegisterBit.errcheck = check_xl_status
+xlMostWriteRegisterBit.__doc__ = """
+xlapi.xlMostWriteRegisterBit
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostCtrlTransmit = _vector_xlapi_dll_.xlMostCtrlTransmit
 xlMostCtrlTransmit.restype = XLstatus
@@ -6915,6 +8281,16 @@ xlMostCtrlTransmit.argtypes = [
     ctypes.POINTER(XLmostCtrlMsg),
 ]
 xlMostCtrlTransmit.errcheck = check_xl_status
+xlMostCtrlTransmit.__doc__ = """
+xlapi.xlMostCtrlTransmit
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostAsyncTransmit = _vector_xlapi_dll_.xlMostAsyncTransmit
 xlMostAsyncTransmit.restype = XLstatus
@@ -6929,6 +8305,16 @@ xlMostAsyncTransmit.argtypes = [
     ctypes.POINTER(XLmostAsyncMsg),
 ]
 xlMostAsyncTransmit.errcheck = check_xl_status
+xlMostAsyncTransmit.__doc__ = """
+xlapi.xlMostAsyncTransmit
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostSyncGetAllocTable = _vector_xlapi_dll_.xlMostSyncGetAllocTable
 xlMostSyncGetAllocTable.restype = XLstatus
@@ -6941,6 +8327,16 @@ xlMostSyncGetAllocTable.argtypes = [
     XLuserHandle,
 ]
 xlMostSyncGetAllocTable.errcheck = check_xl_status
+xlMostSyncGetAllocTable.__doc__ = """
+xlapi.xlMostSyncGetAllocTable
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostCtrlSyncAudio = _vector_xlapi_dll_.xlMostCtrlSyncAudio
 xlMostCtrlSyncAudio.restype = XLstatus
@@ -6959,6 +8355,16 @@ xlMostCtrlSyncAudio.argtypes = [
     ctypes.c_uint,
 ]
 xlMostCtrlSyncAudio.errcheck = check_xl_status
+xlMostCtrlSyncAudio.__doc__ = """
+xlapi.xlMostCtrlSyncAudio
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostCtrlSyncAudioEx = _vector_xlapi_dll_.xlMostCtrlSyncAudioEx
 xlMostCtrlSyncAudioEx.restype = XLstatus
@@ -6977,6 +8383,16 @@ xlMostCtrlSyncAudioEx.argtypes = [
     ctypes.c_uint,
 ]
 xlMostCtrlSyncAudioEx.errcheck = check_xl_status
+xlMostCtrlSyncAudioEx.__doc__ = """
+xlapi.xlMostCtrlSyncAudioEx
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostSyncVolume = _vector_xlapi_dll_.xlMostSyncVolume
 xlMostSyncVolume.restype = XLstatus
@@ -6993,6 +8409,16 @@ xlMostSyncVolume.argtypes = [
     ctypes.c_ubyte,
 ]
 xlMostSyncVolume.errcheck = check_xl_status
+xlMostSyncVolume.__doc__ = """
+xlapi.xlMostSyncVolume
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostSyncMute = _vector_xlapi_dll_.xlMostSyncMute
 xlMostSyncMute.restype = XLstatus
@@ -7009,6 +8435,16 @@ xlMostSyncMute.argtypes = [
     ctypes.c_ubyte,
 ]
 xlMostSyncMute.errcheck = check_xl_status
+xlMostSyncMute.__doc__ = """
+xlapi.xlMostSyncMute
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostSyncGetVolumeStatus = _vector_xlapi_dll_.xlMostSyncGetVolumeStatus
 xlMostSyncGetVolumeStatus.restype = XLstatus
@@ -7023,6 +8459,16 @@ xlMostSyncGetVolumeStatus.argtypes = [
     ctypes.c_uint,
 ]
 xlMostSyncGetVolumeStatus.errcheck = check_xl_status
+xlMostSyncGetVolumeStatus.__doc__ = """
+xlapi.xlMostSyncGetVolumeStatus
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostSyncGetMuteStatus = _vector_xlapi_dll_.xlMostSyncGetMuteStatus
 xlMostSyncGetMuteStatus.restype = XLstatus
@@ -7037,6 +8483,16 @@ xlMostSyncGetMuteStatus.argtypes = [
     ctypes.c_uint,
 ]
 xlMostSyncGetMuteStatus.errcheck = check_xl_status
+xlMostSyncGetMuteStatus.__doc__ = """
+xlapi.xlMostSyncGetMuteStatus
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostGetRxLight = _vector_xlapi_dll_.xlMostGetRxLight
 xlMostGetRxLight.restype = XLstatus
@@ -7049,6 +8505,16 @@ xlMostGetRxLight.argtypes = [
     XLuserHandle,
 ]
 xlMostGetRxLight.errcheck = check_xl_status
+xlMostGetRxLight.__doc__ = """
+xlapi.xlMostGetRxLight
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostSetTxLight = _vector_xlapi_dll_.xlMostSetTxLight
 xlMostSetTxLight.restype = XLstatus
@@ -7063,6 +8529,16 @@ xlMostSetTxLight.argtypes = [
     ctypes.c_ubyte,
 ]
 xlMostSetTxLight.errcheck = check_xl_status
+xlMostSetTxLight.__doc__ = """
+xlapi.xlMostSetTxLight
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostGetTxLight = _vector_xlapi_dll_.xlMostGetTxLight
 xlMostGetTxLight.restype = XLstatus
@@ -7075,6 +8551,16 @@ xlMostGetTxLight.argtypes = [
     XLuserHandle,
 ]
 xlMostGetTxLight.errcheck = check_xl_status
+xlMostGetTxLight.__doc__ = """
+xlapi.xlMostGetTxLight
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostSetLightPower = _vector_xlapi_dll_.xlMostSetLightPower
 xlMostSetLightPower.restype = XLstatus
@@ -7089,6 +8575,16 @@ xlMostSetLightPower.argtypes = [
     ctypes.c_ubyte,
 ]
 xlMostSetLightPower.errcheck = check_xl_status
+xlMostSetLightPower.__doc__ = """
+xlapi.xlMostSetLightPower
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostGetLockStatus = _vector_xlapi_dll_.xlMostGetLockStatus
 xlMostGetLockStatus.restype = XLstatus
@@ -7101,6 +8597,16 @@ xlMostGetLockStatus.argtypes = [
     XLuserHandle,
 ]
 xlMostGetLockStatus.errcheck = check_xl_status
+xlMostGetLockStatus.__doc__ = """
+xlapi.xlMostGetLockStatus
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostGenerateLightError = _vector_xlapi_dll_.xlMostGenerateLightError
 xlMostGenerateLightError.restype = XLstatus
@@ -7119,6 +8625,16 @@ xlMostGenerateLightError.argtypes = [
     ctypes.c_ushort,
 ]
 xlMostGenerateLightError.errcheck = check_xl_status
+xlMostGenerateLightError.__doc__ = """
+xlapi.xlMostGenerateLightError
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostGenerateLockError = _vector_xlapi_dll_.xlMostGenerateLockError
 xlMostGenerateLockError.restype = XLstatus
@@ -7137,6 +8653,16 @@ xlMostGenerateLockError.argtypes = [
     ctypes.c_ushort,
 ]
 xlMostGenerateLockError.errcheck = check_xl_status
+xlMostGenerateLockError.__doc__ = """
+xlapi.xlMostGenerateLockError
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostCtrlRxBuffer = _vector_xlapi_dll_.xlMostCtrlRxBuffer
 xlMostCtrlRxBuffer.restype = XLstatus
@@ -7151,6 +8677,16 @@ xlMostCtrlRxBuffer.argtypes = [
     ctypes.c_ushort,
 ]
 xlMostCtrlRxBuffer.errcheck = check_xl_status
+xlMostCtrlRxBuffer.__doc__ = """
+xlapi.xlMostCtrlRxBuffer
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostTwinklePowerLed = _vector_xlapi_dll_.xlMostTwinklePowerLed
 xlMostTwinklePowerLed.restype = XLstatus
@@ -7163,6 +8699,16 @@ xlMostTwinklePowerLed.argtypes = [
     XLuserHandle,
 ]
 xlMostTwinklePowerLed.errcheck = check_xl_status
+xlMostTwinklePowerLed.__doc__ = """
+xlapi.xlMostTwinklePowerLed
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostCtrlConfigureBusload = _vector_xlapi_dll_.xlMostCtrlConfigureBusload
 xlMostCtrlConfigureBusload.restype = XLstatus
@@ -7177,6 +8723,16 @@ xlMostCtrlConfigureBusload.argtypes = [
     ctypes.POINTER(XLmostCtrlBusloadConfiguration),
 ]
 xlMostCtrlConfigureBusload.errcheck = check_xl_status
+xlMostCtrlConfigureBusload.__doc__ = """
+xlapi.xlMostCtrlConfigureBusload
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostCtrlGenerateBusload = _vector_xlapi_dll_.xlMostCtrlGenerateBusload
 xlMostCtrlGenerateBusload.restype = XLstatus
@@ -7191,6 +8747,16 @@ xlMostCtrlGenerateBusload.argtypes = [
     XLulong,
 ]
 xlMostCtrlGenerateBusload.errcheck = check_xl_status
+xlMostCtrlGenerateBusload.__doc__ = """
+xlapi.xlMostCtrlGenerateBusload
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostAsyncConfigureBusload = _vector_xlapi_dll_.xlMostAsyncConfigureBusload
 xlMostAsyncConfigureBusload.restype = XLstatus
@@ -7205,6 +8771,16 @@ xlMostAsyncConfigureBusload.argtypes = [
     ctypes.POINTER(XLmostAsyncBusloadConfiguration),
 ]
 xlMostAsyncConfigureBusload.errcheck = check_xl_status
+xlMostAsyncConfigureBusload.__doc__ = """
+xlapi.xlMostAsyncConfigureBusload
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostAsyncGenerateBusload = _vector_xlapi_dll_.xlMostAsyncGenerateBusload
 xlMostAsyncGenerateBusload.restype = XLstatus
@@ -7219,6 +8795,16 @@ xlMostAsyncGenerateBusload.argtypes = [
     XLulong,
 ]
 xlMostAsyncGenerateBusload.errcheck = check_xl_status
+xlMostAsyncGenerateBusload.__doc__ = """
+xlapi.xlMostAsyncGenerateBusload
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostStreamOpen = _vector_xlapi_dll_.xlMostStreamOpen
 xlMostStreamOpen.restype = XLstatus
@@ -7233,6 +8819,16 @@ xlMostStreamOpen.argtypes = [
     ctypes.POINTER(XLmostStreamOpen),
 ]
 xlMostStreamOpen.errcheck = check_xl_status
+xlMostStreamOpen.__doc__ = """
+xlapi.xlMostStreamOpen
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostStreamClose = _vector_xlapi_dll_.xlMostStreamClose
 xlMostStreamClose.restype = XLstatus
@@ -7247,6 +8843,16 @@ xlMostStreamClose.argtypes = [
     ctypes.c_uint,
 ]
 xlMostStreamClose.errcheck = check_xl_status
+xlMostStreamClose.__doc__ = """
+xlapi.xlMostStreamClose
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostStreamStart = _vector_xlapi_dll_.xlMostStreamStart
 xlMostStreamStart.restype = XLstatus
@@ -7263,6 +8869,16 @@ xlMostStreamStart.argtypes = [
     ctypes.c_ubyte*60,
 ]
 xlMostStreamStart.errcheck = check_xl_status
+xlMostStreamStart.__doc__ = """
+xlapi.xlMostStreamStart
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostStreamStop = _vector_xlapi_dll_.xlMostStreamStop
 xlMostStreamStop.restype = XLstatus
@@ -7277,6 +8893,16 @@ xlMostStreamStop.argtypes = [
     ctypes.c_uint,
 ]
 xlMostStreamStop.errcheck = check_xl_status
+xlMostStreamStop.__doc__ = """
+xlapi.xlMostStreamStop
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostStreamBufferAllocate = _vector_xlapi_dll_.xlMostStreamBufferAllocate
 xlMostStreamBufferAllocate.restype = XLstatus
@@ -7295,6 +8921,16 @@ xlMostStreamBufferAllocate.argtypes = [
     ctypes.POINTER(ctypes.c_uint),
 ]
 xlMostStreamBufferAllocate.errcheck = check_xl_status
+xlMostStreamBufferAllocate.__doc__ = """
+xlapi.xlMostStreamBufferAllocate
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostStreamBufferDeallocateAll = _vector_xlapi_dll_.xlMostStreamBufferDeallocateAll
 xlMostStreamBufferDeallocateAll.restype = XLstatus
@@ -7309,6 +8945,16 @@ xlMostStreamBufferDeallocateAll.argtypes = [
     ctypes.c_uint,
 ]
 xlMostStreamBufferDeallocateAll.errcheck = check_xl_status
+xlMostStreamBufferDeallocateAll.__doc__ = """
+xlapi.xlMostStreamBufferDeallocateAll
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostStreamBufferSetNext = _vector_xlapi_dll_.xlMostStreamBufferSetNext
 xlMostStreamBufferSetNext.restype = XLstatus
@@ -7327,6 +8973,16 @@ xlMostStreamBufferSetNext.argtypes = [
     ctypes.c_uint,
 ]
 xlMostStreamBufferSetNext.errcheck = check_xl_status
+xlMostStreamBufferSetNext.__doc__ = """
+xlapi.xlMostStreamBufferSetNext
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostStreamGetInfo = _vector_xlapi_dll_.xlMostStreamGetInfo
 xlMostStreamGetInfo.restype = XLstatus
@@ -7341,6 +8997,16 @@ xlMostStreamGetInfo.argtypes = [
     ctypes.POINTER(XLmostStreamInfo),
 ]
 xlMostStreamGetInfo.errcheck = check_xl_status
+xlMostStreamGetInfo.__doc__ = """
+xlapi.xlMostStreamGetInfo
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMostStreamBufferClearAll = _vector_xlapi_dll_.xlMostStreamBufferClearAll
 xlMostStreamBufferClearAll.restype = XLstatus
@@ -7355,6 +9021,16 @@ xlMostStreamBufferClearAll.argtypes = [
     ctypes.c_uint,
 ]
 xlMostStreamBufferClearAll.errcheck = check_xl_status
+xlMostStreamBufferClearAll.__doc__ = """
+xlapi.xlMostStreamBufferClearAll
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlFrSetConfiguration = _vector_xlapi_dll_.xlFrSetConfiguration
 xlFrSetConfiguration.restype = XLstatus
@@ -7367,6 +9043,16 @@ xlFrSetConfiguration.argtypes = [
     ctypes.POINTER(XLfrClusterConfig),
 ]
 xlFrSetConfiguration.errcheck = check_xl_status
+xlFrSetConfiguration.__doc__ = """
+xlapi.xlFrSetConfiguration
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlFrGetChannelConfiguration = _vector_xlapi_dll_.xlFrGetChannelConfiguration
 xlFrGetChannelConfiguration.restype = XLstatus
@@ -7379,6 +9065,16 @@ xlFrGetChannelConfiguration.argtypes = [
     ctypes.POINTER(XLfrChannelConfig),
 ]
 xlFrGetChannelConfiguration.errcheck = check_xl_status
+xlFrGetChannelConfiguration.__doc__ = """
+xlapi.xlFrGetChannelConfiguration
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlFrSetMode = _vector_xlapi_dll_.xlFrSetMode
 xlFrSetMode.restype = XLstatus
@@ -7391,6 +9087,16 @@ xlFrSetMode.argtypes = [
     ctypes.POINTER(XLfrMode),
 ]
 xlFrSetMode.errcheck = check_xl_status
+xlFrSetMode.__doc__ = """
+xlapi.xlFrSetMode
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlFrInitStartupAndSync = _vector_xlapi_dll_.xlFrInitStartupAndSync
 xlFrInitStartupAndSync.restype = XLstatus
@@ -7403,6 +9109,16 @@ xlFrInitStartupAndSync.argtypes = [
     ctypes.POINTER(XLfrEvent),
 ]
 xlFrInitStartupAndSync.errcheck = check_xl_status
+xlFrInitStartupAndSync.__doc__ = """
+xlapi.xlFrInitStartupAndSync
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlFrSetupSymbolWindow = _vector_xlapi_dll_.xlFrSetupSymbolWindow
 xlFrSetupSymbolWindow.restype = XLstatus
@@ -7417,6 +9133,16 @@ xlFrSetupSymbolWindow.argtypes = [
     ctypes.c_uint,
 ]
 xlFrSetupSymbolWindow.errcheck = check_xl_status
+xlFrSetupSymbolWindow.__doc__ = """
+xlapi.xlFrSetupSymbolWindow
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlFrReceive = _vector_xlapi_dll_.xlFrReceive
 xlFrReceive.restype = XLstatus
@@ -7427,6 +9153,16 @@ xlFrReceive.argtypes = [
     ctypes.POINTER(XLfrEvent),
 ]
 xlFrReceive.errcheck = check_xl_status
+xlFrReceive.__doc__ = """
+xlapi.xlFrReceive
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlFrTransmit = _vector_xlapi_dll_.xlFrTransmit
 xlFrTransmit.restype = XLstatus
@@ -7439,6 +9175,16 @@ xlFrTransmit.argtypes = [
     ctypes.POINTER(XLfrEvent),
 ]
 xlFrTransmit.errcheck = check_xl_status
+xlFrTransmit.__doc__ = """
+xlapi.xlFrTransmit
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlFrSetTransceiverMode = _vector_xlapi_dll_.xlFrSetTransceiverMode
 xlFrSetTransceiverMode.restype = XLstatus
@@ -7453,6 +9199,16 @@ xlFrSetTransceiverMode.argtypes = [
     ctypes.c_uint,
 ]
 xlFrSetTransceiverMode.errcheck = check_xl_status
+xlFrSetTransceiverMode.__doc__ = """
+xlapi.xlFrSetTransceiverMode
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlFrSendSymbolWindow = _vector_xlapi_dll_.xlFrSendSymbolWindow
 xlFrSendSymbolWindow.restype = XLstatus
@@ -7465,6 +9221,16 @@ xlFrSendSymbolWindow.argtypes = [
     ctypes.c_uint,
 ]
 xlFrSendSymbolWindow.errcheck = check_xl_status
+xlFrSendSymbolWindow.__doc__ = """
+xlapi.xlFrSendSymbolWindow
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlFrActivateSpy = _vector_xlapi_dll_.xlFrActivateSpy
 xlFrActivateSpy.restype = XLstatus
@@ -7477,6 +9243,16 @@ xlFrActivateSpy.argtypes = [
     ctypes.c_uint,
 ]
 xlFrActivateSpy.errcheck = check_xl_status
+xlFrActivateSpy.__doc__ = """
+xlapi.xlFrActivateSpy
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlFrSetAcceptanceFilter = _vector_xlapi_dll_.xlFrSetAcceptanceFilter
 xlFrSetAcceptanceFilter.restype = XLstatus
@@ -7489,6 +9265,16 @@ xlFrSetAcceptanceFilter.argtypes = [
     ctypes.POINTER(XLfrAcceptanceFilter),
 ]
 xlFrSetAcceptanceFilter.errcheck = check_xl_status
+xlFrSetAcceptanceFilter.__doc__ = """
+xlapi.xlFrSetAcceptanceFilter
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlGetRemoteDriverConfig = _vector_xlapi_dll_.xlGetRemoteDriverConfig
 xlGetRemoteDriverConfig.restype = XLstatus
@@ -7497,6 +9283,17 @@ xlGetRemoteDriverConfig.argtypes = [
     ctypes.POINTER(XLdriverConfig),
 ]
 xlGetRemoteDriverConfig.errcheck = check_xl_status
+xlGetRemoteDriverConfig.__doc__ = """
+xlapi.xlGetRemoteDriverConfig
+    This function is similar to xlGetDriverConfig, but returns the driver
+    configuration of the installed slide-in module in a VN8900 device.
+Syntax:
+    XLstatus xlGetRemoteDriverConfig(XLdriverConfig *pDriverConfig)
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlGetRemoteDeviceInfo = _vector_xlapi_dll_.xlGetRemoteDeviceInfo
 xlGetRemoteDeviceInfo.restype = XLstatus
@@ -7509,6 +9306,16 @@ xlGetRemoteDeviceInfo.argtypes = [
     ctypes.c_uint,
 ]
 xlGetRemoteDeviceInfo.errcheck = check_xl_status
+xlGetRemoteDeviceInfo.__doc__ = """
+xlapi.xlGetRemoteDeviceInfo
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlReleaseRemoteDeviceInfo = _vector_xlapi_dll_.xlReleaseRemoteDeviceInfo
 xlReleaseRemoteDeviceInfo.restype = XLstatus
@@ -7517,6 +9324,16 @@ xlReleaseRemoteDeviceInfo.argtypes = [
     ctypes.POINTER(ctypes.POINTER(XLremoteDeviceInfo)),
 ]
 xlReleaseRemoteDeviceInfo.errcheck = check_xl_status
+xlReleaseRemoteDeviceInfo.__doc__ = """
+xlapi.xlReleaseRemoteDeviceInfo
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlAddRemoteDevice = _vector_xlapi_dll_.xlAddRemoteDevice
 xlAddRemoteDevice.restype = XLstatus
@@ -7529,6 +9346,16 @@ xlAddRemoteDevice.argtypes = [
     ctypes.c_uint,
 ]
 xlAddRemoteDevice.errcheck = check_xl_status
+xlAddRemoteDevice.__doc__ = """
+xlapi.xlAddRemoteDevice
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlRemoveRemoteDevice = _vector_xlapi_dll_.xlRemoveRemoteDevice
 xlRemoveRemoteDevice.restype = XLstatus
@@ -7541,6 +9368,16 @@ xlRemoveRemoteDevice.argtypes = [
     ctypes.c_uint,
 ]
 xlRemoveRemoteDevice.errcheck = check_xl_status
+xlRemoveRemoteDevice.__doc__ = """
+xlapi.xlRemoveRemoteDevice
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlUpdateRemoteDeviceInfo = _vector_xlapi_dll_.xlUpdateRemoteDeviceInfo
 xlUpdateRemoteDeviceInfo.restype = XLstatus
@@ -7551,6 +9388,16 @@ xlUpdateRemoteDeviceInfo.argtypes = [
     ctypes.c_uint,
 ]
 xlUpdateRemoteDeviceInfo.errcheck = check_xl_status
+xlUpdateRemoteDeviceInfo.__doc__ = """
+xlapi.xlUpdateRemoteDeviceInfo
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlGetRemoteHwInfo = _vector_xlapi_dll_.xlGetRemoteHwInfo
 xlGetRemoteHwInfo.restype = XLstatus
@@ -7565,6 +9412,16 @@ xlGetRemoteHwInfo.argtypes = [
     ctypes.POINTER(ctypes.c_int),
 ]
 xlGetRemoteHwInfo.errcheck = check_xl_status
+xlGetRemoteHwInfo.__doc__ = """
+xlapi.xlGetRemoteHwInfo
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlRegisterRemoteDevice = _vector_xlapi_dll_.xlRegisterRemoteDevice
 xlRegisterRemoteDevice.restype = XLstatus
@@ -7577,6 +9434,16 @@ xlRegisterRemoteDevice.argtypes = [
     ctypes.c_uint,
 ]
 xlRegisterRemoteDevice.errcheck = check_xl_status
+xlRegisterRemoteDevice.__doc__ = """
+xlapi.xlRegisterRemoteDevice
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlIoSetTriggerMode = _vector_xlapi_dll_.xlIoSetTriggerMode
 xlIoSetTriggerMode.restype = XLstatus
@@ -7589,6 +9456,16 @@ xlIoSetTriggerMode.argtypes = [
     ctypes.POINTER(XLdaioTriggerMode),
 ]
 xlIoSetTriggerMode.errcheck = check_xl_status
+xlIoSetTriggerMode.__doc__ = """
+xlapi.xlIoSetTriggerMode
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlIoSetDigitalOutput = _vector_xlapi_dll_.xlIoSetDigitalOutput
 xlIoSetDigitalOutput.restype = XLstatus
@@ -7601,6 +9478,16 @@ xlIoSetDigitalOutput.argtypes = [
     ctypes.POINTER(XLdaioDigitalParams),
 ]
 xlIoSetDigitalOutput.errcheck = check_xl_status
+xlIoSetDigitalOutput.__doc__ = """
+xlapi.xlIoSetDigitalOutput
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlIoConfigurePorts = _vector_xlapi_dll_.xlIoConfigurePorts
 xlIoConfigurePorts.restype = XLstatus
@@ -7613,6 +9500,16 @@ xlIoConfigurePorts.argtypes = [
     ctypes.POINTER(XLdaioSetPort),
 ]
 xlIoConfigurePorts.errcheck = check_xl_status
+xlIoConfigurePorts.__doc__ = """
+xlapi.xlIoConfigurePorts
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlIoSetDigInThreshold = _vector_xlapi_dll_.xlIoSetDigInThreshold
 xlIoSetDigInThreshold.restype = XLstatus
@@ -7625,6 +9522,16 @@ xlIoSetDigInThreshold.argtypes = [
     ctypes.c_uint,
 ]
 xlIoSetDigInThreshold.errcheck = check_xl_status
+xlIoSetDigInThreshold.__doc__ = """
+xlapi.xlIoSetDigInThreshold
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlIoSetDigOutLevel = _vector_xlapi_dll_.xlIoSetDigOutLevel
 xlIoSetDigOutLevel.restype = XLstatus
@@ -7637,6 +9544,16 @@ xlIoSetDigOutLevel.argtypes = [
     ctypes.c_uint,
 ]
 xlIoSetDigOutLevel.errcheck = check_xl_status
+xlIoSetDigOutLevel.__doc__ = """
+xlapi.xlIoSetDigOutLevel
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlIoSetAnalogOutput = _vector_xlapi_dll_.xlIoSetAnalogOutput
 xlIoSetAnalogOutput.restype = XLstatus
@@ -7649,6 +9566,16 @@ xlIoSetAnalogOutput.argtypes = [
     ctypes.POINTER(XLdaioAnalogParams),
 ]
 xlIoSetAnalogOutput.errcheck = check_xl_status
+xlIoSetAnalogOutput.__doc__ = """
+xlapi.xlIoSetAnalogOutput
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlIoStartSampling = _vector_xlapi_dll_.xlIoStartSampling
 xlIoStartSampling.restype = XLstatus
@@ -7661,6 +9588,16 @@ xlIoStartSampling.argtypes = [
     ctypes.c_uint,
 ]
 xlIoStartSampling.errcheck = check_xl_status
+xlIoStartSampling.__doc__ = """
+xlapi.xlIoStartSampling
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150Receive = _vector_xlapi_dll_.xlMost150Receive
 xlMost150Receive.restype = XLstatus
@@ -7671,6 +9608,16 @@ xlMost150Receive.argtypes = [
     ctypes.POINTER(XLmost150event),
 ]
 xlMost150Receive.errcheck = check_xl_status
+xlMost150Receive.__doc__ = """
+xlapi.xlMost150Receive
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150TwinklePowerLed = _vector_xlapi_dll_.xlMost150TwinklePowerLed
 xlMost150TwinklePowerLed.restype = XLstatus
@@ -7683,6 +9630,16 @@ xlMost150TwinklePowerLed.argtypes = [
     XLuserHandle,
 ]
 xlMost150TwinklePowerLed.errcheck = check_xl_status
+xlMost150TwinklePowerLed.__doc__ = """
+xlapi.xlMost150TwinklePowerLed
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150SwitchEventSources = _vector_xlapi_dll_.xlMost150SwitchEventSources
 xlMost150SwitchEventSources.restype = XLstatus
@@ -7697,6 +9654,16 @@ xlMost150SwitchEventSources.argtypes = [
     ctypes.c_uint,
 ]
 xlMost150SwitchEventSources.errcheck = check_xl_status
+xlMost150SwitchEventSources.__doc__ = """
+xlapi.xlMost150SwitchEventSources
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150SetDeviceMode = _vector_xlapi_dll_.xlMost150SetDeviceMode
 xlMost150SetDeviceMode.restype = XLstatus
@@ -7711,6 +9678,16 @@ xlMost150SetDeviceMode.argtypes = [
     ctypes.c_uint,
 ]
 xlMost150SetDeviceMode.errcheck = check_xl_status
+xlMost150SetDeviceMode.__doc__ = """
+xlapi.xlMost150SetDeviceMode
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150GetDeviceMode = _vector_xlapi_dll_.xlMost150GetDeviceMode
 xlMost150GetDeviceMode.restype = XLstatus
@@ -7723,6 +9700,16 @@ xlMost150GetDeviceMode.argtypes = [
     XLuserHandle,
 ]
 xlMost150GetDeviceMode.errcheck = check_xl_status
+xlMost150GetDeviceMode.__doc__ = """
+xlapi.xlMost150GetDeviceMode
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150SetSPDIFMode = _vector_xlapi_dll_.xlMost150SetSPDIFMode
 xlMost150SetSPDIFMode.restype = XLstatus
@@ -7737,6 +9724,16 @@ xlMost150SetSPDIFMode.argtypes = [
     ctypes.c_uint,
 ]
 xlMost150SetSPDIFMode.errcheck = check_xl_status
+xlMost150SetSPDIFMode.__doc__ = """
+xlapi.xlMost150SetSPDIFMode
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150GetSPDIFMode = _vector_xlapi_dll_.xlMost150GetSPDIFMode
 xlMost150GetSPDIFMode.restype = XLstatus
@@ -7749,6 +9746,16 @@ xlMost150GetSPDIFMode.argtypes = [
     XLuserHandle,
 ]
 xlMost150GetSPDIFMode.errcheck = check_xl_status
+xlMost150GetSPDIFMode.__doc__ = """
+xlapi.xlMost150GetSPDIFMode
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150SetSpecialNodeInfo = _vector_xlapi_dll_.xlMost150SetSpecialNodeInfo
 xlMost150SetSpecialNodeInfo.restype = XLstatus
@@ -7763,6 +9770,16 @@ xlMost150SetSpecialNodeInfo.argtypes = [
     ctypes.POINTER(XLmost150SetSpecialNodeInfo),
 ]
 xlMost150SetSpecialNodeInfo.errcheck = check_xl_status
+xlMost150SetSpecialNodeInfo.__doc__ = """
+xlapi.xlMost150SetSpecialNodeInfo
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150GetSpecialNodeInfo = _vector_xlapi_dll_.xlMost150GetSpecialNodeInfo
 xlMost150GetSpecialNodeInfo.restype = XLstatus
@@ -7777,6 +9794,16 @@ xlMost150GetSpecialNodeInfo.argtypes = [
     ctypes.c_uint,
 ]
 xlMost150GetSpecialNodeInfo.errcheck = check_xl_status
+xlMost150GetSpecialNodeInfo.__doc__ = """
+xlapi.xlMost150GetSpecialNodeInfo
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150SetFrequency = _vector_xlapi_dll_.xlMost150SetFrequency
 xlMost150SetFrequency.restype = XLstatus
@@ -7791,6 +9818,16 @@ xlMost150SetFrequency.argtypes = [
     ctypes.c_uint,
 ]
 xlMost150SetFrequency.errcheck = check_xl_status
+xlMost150SetFrequency.__doc__ = """
+xlapi.xlMost150SetFrequency
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150GetFrequency = _vector_xlapi_dll_.xlMost150GetFrequency
 xlMost150GetFrequency.restype = XLstatus
@@ -7803,6 +9840,16 @@ xlMost150GetFrequency.argtypes = [
     XLuserHandle,
 ]
 xlMost150GetFrequency.errcheck = check_xl_status
+xlMost150GetFrequency.__doc__ = """
+xlapi.xlMost150GetFrequency
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150CtrlTransmit = _vector_xlapi_dll_.xlMost150CtrlTransmit
 xlMost150CtrlTransmit.restype = XLstatus
@@ -7817,6 +9864,16 @@ xlMost150CtrlTransmit.argtypes = [
     ctypes.POINTER(XLmost150CtrlTxMsg),
 ]
 xlMost150CtrlTransmit.errcheck = check_xl_status
+xlMost150CtrlTransmit.__doc__ = """
+xlapi.xlMost150CtrlTransmit
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150AsyncTransmit = _vector_xlapi_dll_.xlMost150AsyncTransmit
 xlMost150AsyncTransmit.restype = XLstatus
@@ -7831,6 +9888,16 @@ xlMost150AsyncTransmit.argtypes = [
     ctypes.POINTER(XLmost150AsyncTxMsg),
 ]
 xlMost150AsyncTransmit.errcheck = check_xl_status
+xlMost150AsyncTransmit.__doc__ = """
+xlapi.xlMost150AsyncTransmit
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150EthernetTransmit = _vector_xlapi_dll_.xlMost150EthernetTransmit
 xlMost150EthernetTransmit.restype = XLstatus
@@ -7845,6 +9912,16 @@ xlMost150EthernetTransmit.argtypes = [
     ctypes.POINTER(XLmost150EthernetTxMsg),
 ]
 xlMost150EthernetTransmit.errcheck = check_xl_status
+xlMost150EthernetTransmit.__doc__ = """
+xlapi.xlMost150EthernetTransmit
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150GetSystemLockFlag = _vector_xlapi_dll_.xlMost150GetSystemLockFlag
 xlMost150GetSystemLockFlag.restype = XLstatus
@@ -7857,6 +9934,16 @@ xlMost150GetSystemLockFlag.argtypes = [
     XLuserHandle,
 ]
 xlMost150GetSystemLockFlag.errcheck = check_xl_status
+xlMost150GetSystemLockFlag.__doc__ = """
+xlapi.xlMost150GetSystemLockFlag
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150GetShutdownFlag = _vector_xlapi_dll_.xlMost150GetShutdownFlag
 xlMost150GetShutdownFlag.restype = XLstatus
@@ -7869,6 +9956,16 @@ xlMost150GetShutdownFlag.argtypes = [
     XLuserHandle,
 ]
 xlMost150GetShutdownFlag.errcheck = check_xl_status
+xlMost150GetShutdownFlag.__doc__ = """
+xlapi.xlMost150GetShutdownFlag
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150Shutdown = _vector_xlapi_dll_.xlMost150Shutdown
 xlMost150Shutdown.restype = XLstatus
@@ -7881,6 +9978,16 @@ xlMost150Shutdown.argtypes = [
     XLuserHandle,
 ]
 xlMost150Shutdown.errcheck = check_xl_status
+xlMost150Shutdown.__doc__ = """
+xlapi.xlMost150Shutdown
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150Startup = _vector_xlapi_dll_.xlMost150Startup
 xlMost150Startup.restype = XLstatus
@@ -7893,6 +10000,16 @@ xlMost150Startup.argtypes = [
     XLuserHandle,
 ]
 xlMost150Startup.errcheck = check_xl_status
+xlMost150Startup.__doc__ = """
+xlapi.xlMost150Startup
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150SyncGetAllocTable = _vector_xlapi_dll_.xlMost150SyncGetAllocTable
 xlMost150SyncGetAllocTable.restype = XLstatus
@@ -7905,6 +10022,16 @@ xlMost150SyncGetAllocTable.argtypes = [
     XLuserHandle,
 ]
 xlMost150SyncGetAllocTable.errcheck = check_xl_status
+xlMost150SyncGetAllocTable.__doc__ = """
+xlapi.xlMost150SyncGetAllocTable
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150CtrlSyncAudio = _vector_xlapi_dll_.xlMost150CtrlSyncAudio
 xlMost150CtrlSyncAudio.restype = XLstatus
@@ -7919,6 +10046,16 @@ xlMost150CtrlSyncAudio.argtypes = [
     ctypes.POINTER(XLmost150SyncAudioParameter),
 ]
 xlMost150CtrlSyncAudio.errcheck = check_xl_status
+xlMost150CtrlSyncAudio.__doc__ = """
+xlapi.xlMost150CtrlSyncAudio
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150SyncSetVolume = _vector_xlapi_dll_.xlMost150SyncSetVolume
 xlMost150SyncSetVolume.restype = XLstatus
@@ -7935,6 +10072,16 @@ xlMost150SyncSetVolume.argtypes = [
     ctypes.c_uint,
 ]
 xlMost150SyncSetVolume.errcheck = check_xl_status
+xlMost150SyncSetVolume.__doc__ = """
+xlapi.xlMost150SyncSetVolume
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150SyncGetVolume = _vector_xlapi_dll_.xlMost150SyncGetVolume
 xlMost150SyncGetVolume.restype = XLstatus
@@ -7949,6 +10096,16 @@ xlMost150SyncGetVolume.argtypes = [
     ctypes.c_uint,
 ]
 xlMost150SyncGetVolume.errcheck = check_xl_status
+xlMost150SyncGetVolume.__doc__ = """
+xlapi.xlMost150SyncGetVolume
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150SyncSetMute = _vector_xlapi_dll_.xlMost150SyncSetMute
 xlMost150SyncSetMute.restype = XLstatus
@@ -7965,6 +10122,16 @@ xlMost150SyncSetMute.argtypes = [
     ctypes.c_uint,
 ]
 xlMost150SyncSetMute.errcheck = check_xl_status
+xlMost150SyncSetMute.__doc__ = """
+xlapi.xlMost150SyncSetMute
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150SyncGetMute = _vector_xlapi_dll_.xlMost150SyncGetMute
 xlMost150SyncGetMute.restype = XLstatus
@@ -7979,6 +10146,16 @@ xlMost150SyncGetMute.argtypes = [
     ctypes.c_uint,
 ]
 xlMost150SyncGetMute.errcheck = check_xl_status
+xlMost150SyncGetMute.__doc__ = """
+xlapi.xlMost150SyncGetMute
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150GetRxLightLockStatus = _vector_xlapi_dll_.xlMost150GetRxLightLockStatus
 xlMost150GetRxLightLockStatus.restype = XLstatus
@@ -7993,6 +10170,16 @@ xlMost150GetRxLightLockStatus.argtypes = [
     ctypes.c_uint,
 ]
 xlMost150GetRxLightLockStatus.errcheck = check_xl_status
+xlMost150GetRxLightLockStatus.__doc__ = """
+xlapi.xlMost150GetRxLightLockStatus
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150SetTxLight = _vector_xlapi_dll_.xlMost150SetTxLight
 xlMost150SetTxLight.restype = XLstatus
@@ -8007,6 +10194,16 @@ xlMost150SetTxLight.argtypes = [
     ctypes.c_uint,
 ]
 xlMost150SetTxLight.errcheck = check_xl_status
+xlMost150SetTxLight.__doc__ = """
+xlapi.xlMost150SetTxLight
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150GetTxLight = _vector_xlapi_dll_.xlMost150GetTxLight
 xlMost150GetTxLight.restype = XLstatus
@@ -8019,6 +10216,16 @@ xlMost150GetTxLight.argtypes = [
     XLuserHandle,
 ]
 xlMost150GetTxLight.errcheck = check_xl_status
+xlMost150GetTxLight.__doc__ = """
+xlapi.xlMost150GetTxLight
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150SetTxLightPower = _vector_xlapi_dll_.xlMost150SetTxLightPower
 xlMost150SetTxLightPower.restype = XLstatus
@@ -8033,6 +10240,16 @@ xlMost150SetTxLightPower.argtypes = [
     ctypes.c_uint,
 ]
 xlMost150SetTxLightPower.errcheck = check_xl_status
+xlMost150SetTxLightPower.__doc__ = """
+xlapi.xlMost150SetTxLightPower
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150GenerateLightError = _vector_xlapi_dll_.xlMost150GenerateLightError
 xlMost150GenerateLightError.restype = XLstatus
@@ -8051,6 +10268,16 @@ xlMost150GenerateLightError.argtypes = [
     ctypes.c_uint,
 ]
 xlMost150GenerateLightError.errcheck = check_xl_status
+xlMost150GenerateLightError.__doc__ = """
+xlapi.xlMost150GenerateLightError
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150GenerateLockError = _vector_xlapi_dll_.xlMost150GenerateLockError
 xlMost150GenerateLockError.restype = XLstatus
@@ -8069,6 +10296,16 @@ xlMost150GenerateLockError.argtypes = [
     ctypes.c_uint,
 ]
 xlMost150GenerateLockError.errcheck = check_xl_status
+xlMost150GenerateLockError.__doc__ = """
+xlapi.xlMost150GenerateLockError
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150ConfigureRxBuffer = _vector_xlapi_dll_.xlMost150ConfigureRxBuffer
 xlMost150ConfigureRxBuffer.restype = XLstatus
@@ -8085,6 +10322,16 @@ xlMost150ConfigureRxBuffer.argtypes = [
     ctypes.c_uint,
 ]
 xlMost150ConfigureRxBuffer.errcheck = check_xl_status
+xlMost150ConfigureRxBuffer.__doc__ = """
+xlapi.xlMost150ConfigureRxBuffer
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150CtrlConfigureBusload = _vector_xlapi_dll_.xlMost150CtrlConfigureBusload
 xlMost150CtrlConfigureBusload.restype = XLstatus
@@ -8099,6 +10346,16 @@ xlMost150CtrlConfigureBusload.argtypes = [
     ctypes.POINTER(XLmost150CtrlBusloadConfig),
 ]
 xlMost150CtrlConfigureBusload.errcheck = check_xl_status
+xlMost150CtrlConfigureBusload.__doc__ = """
+xlapi.xlMost150CtrlConfigureBusload
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150CtrlGenerateBusload = _vector_xlapi_dll_.xlMost150CtrlGenerateBusload
 xlMost150CtrlGenerateBusload.restype = XLstatus
@@ -8113,6 +10370,16 @@ xlMost150CtrlGenerateBusload.argtypes = [
     XLulong,
 ]
 xlMost150CtrlGenerateBusload.errcheck = check_xl_status
+xlMost150CtrlGenerateBusload.__doc__ = """
+xlapi.xlMost150CtrlGenerateBusload
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150AsyncConfigureBusload = _vector_xlapi_dll_.xlMost150AsyncConfigureBusload
 xlMost150AsyncConfigureBusload.restype = XLstatus
@@ -8127,6 +10394,16 @@ xlMost150AsyncConfigureBusload.argtypes = [
     ctypes.POINTER(XLmost150AsyncBusloadConfig),
 ]
 xlMost150AsyncConfigureBusload.errcheck = check_xl_status
+xlMost150AsyncConfigureBusload.__doc__ = """
+xlapi.xlMost150AsyncConfigureBusload
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150AsyncGenerateBusload = _vector_xlapi_dll_.xlMost150AsyncGenerateBusload
 xlMost150AsyncGenerateBusload.restype = XLstatus
@@ -8141,6 +10418,16 @@ xlMost150AsyncGenerateBusload.argtypes = [
     XLulong,
 ]
 xlMost150AsyncGenerateBusload.errcheck = check_xl_status
+xlMost150AsyncGenerateBusload.__doc__ = """
+xlapi.xlMost150AsyncGenerateBusload
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150SetECLLine = _vector_xlapi_dll_.xlMost150SetECLLine
 xlMost150SetECLLine.restype = XLstatus
@@ -8155,6 +10442,16 @@ xlMost150SetECLLine.argtypes = [
     ctypes.c_uint,
 ]
 xlMost150SetECLLine.errcheck = check_xl_status
+xlMost150SetECLLine.__doc__ = """
+xlapi.xlMost150SetECLLine
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150SetECLTermination = _vector_xlapi_dll_.xlMost150SetECLTermination
 xlMost150SetECLTermination.restype = XLstatus
@@ -8169,6 +10466,16 @@ xlMost150SetECLTermination.argtypes = [
     ctypes.c_uint,
 ]
 xlMost150SetECLTermination.errcheck = check_xl_status
+xlMost150SetECLTermination.__doc__ = """
+xlapi.xlMost150SetECLTermination
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150GetECLInfo = _vector_xlapi_dll_.xlMost150GetECLInfo
 xlMost150GetECLInfo.restype = XLstatus
@@ -8181,6 +10488,16 @@ xlMost150GetECLInfo.argtypes = [
     XLuserHandle,
 ]
 xlMost150GetECLInfo.errcheck = check_xl_status
+xlMost150GetECLInfo.__doc__ = """
+xlapi.xlMost150GetECLInfo
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150StreamOpen = _vector_xlapi_dll_.xlMost150StreamOpen
 xlMost150StreamOpen.restype = XLstatus
@@ -8195,6 +10512,16 @@ xlMost150StreamOpen.argtypes = [
     ctypes.POINTER(XLmost150StreamOpen),
 ]
 xlMost150StreamOpen.errcheck = check_xl_status
+xlMost150StreamOpen.__doc__ = """
+xlapi.xlMost150StreamOpen
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150StreamClose = _vector_xlapi_dll_.xlMost150StreamClose
 xlMost150StreamClose.restype = XLstatus
@@ -8209,6 +10536,16 @@ xlMost150StreamClose.argtypes = [
     ctypes.c_uint,
 ]
 xlMost150StreamClose.errcheck = check_xl_status
+xlMost150StreamClose.__doc__ = """
+xlapi.xlMost150StreamClose
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150StreamStart = _vector_xlapi_dll_.xlMost150StreamStart
 xlMost150StreamStart.restype = XLstatus
@@ -8227,6 +10564,16 @@ xlMost150StreamStart.argtypes = [
     ctypes.POINTER(ctypes.c_uint),
 ]
 xlMost150StreamStart.errcheck = check_xl_status
+xlMost150StreamStart.__doc__ = """
+xlapi.xlMost150StreamStart
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150StreamStop = _vector_xlapi_dll_.xlMost150StreamStop
 xlMost150StreamStop.restype = XLstatus
@@ -8241,6 +10588,16 @@ xlMost150StreamStop.argtypes = [
     ctypes.c_uint,
 ]
 xlMost150StreamStop.errcheck = check_xl_status
+xlMost150StreamStop.__doc__ = """
+xlapi.xlMost150StreamStop
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150StreamTransmitData = _vector_xlapi_dll_.xlMost150StreamTransmitData
 xlMost150StreamTransmitData.restype = XLstatus
@@ -8259,6 +10616,16 @@ xlMost150StreamTransmitData.argtypes = [
     ctypes.POINTER(ctypes.c_uint),
 ]
 xlMost150StreamTransmitData.errcheck = check_xl_status
+xlMost150StreamTransmitData.__doc__ = """
+xlapi.xlMost150StreamTransmitData
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150StreamClearTxFifo = _vector_xlapi_dll_.xlMost150StreamClearTxFifo
 xlMost150StreamClearTxFifo.restype = XLstatus
@@ -8273,6 +10640,16 @@ xlMost150StreamClearTxFifo.argtypes = [
     ctypes.c_uint,
 ]
 xlMost150StreamClearTxFifo.errcheck = check_xl_status
+xlMost150StreamClearTxFifo.__doc__ = """
+xlapi.xlMost150StreamClearTxFifo
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150StreamGetInfo = _vector_xlapi_dll_.xlMost150StreamGetInfo
 xlMost150StreamGetInfo.restype = XLstatus
@@ -8287,6 +10664,16 @@ xlMost150StreamGetInfo.argtypes = [
     ctypes.POINTER(XLmost150StreamInfo),
 ]
 xlMost150StreamGetInfo.errcheck = check_xl_status
+xlMost150StreamGetInfo.__doc__ = """
+xlapi.xlMost150StreamGetInfo
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150StreamInitRxFifo = _vector_xlapi_dll_.xlMost150StreamInitRxFifo
 xlMost150StreamInitRxFifo.restype = XLstatus
@@ -8297,6 +10684,16 @@ xlMost150StreamInitRxFifo.argtypes = [
     XLaccess,
 ]
 xlMost150StreamInitRxFifo.errcheck = check_xl_status
+xlMost150StreamInitRxFifo.__doc__ = """
+xlapi.xlMost150StreamInitRxFifo
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150StreamReceiveData = _vector_xlapi_dll_.xlMost150StreamReceiveData
 xlMost150StreamReceiveData.restype = XLstatus
@@ -8311,6 +10708,16 @@ xlMost150StreamReceiveData.argtypes = [
     ctypes.POINTER(ctypes.c_uint),
 ]
 xlMost150StreamReceiveData.errcheck = check_xl_status
+xlMost150StreamReceiveData.__doc__ = """
+xlapi.xlMost150StreamReceiveData
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150GenerateBypassStress = _vector_xlapi_dll_.xlMost150GenerateBypassStress
 xlMost150GenerateBypassStress.restype = XLstatus
@@ -8329,6 +10736,16 @@ xlMost150GenerateBypassStress.argtypes = [
     ctypes.c_uint,
 ]
 xlMost150GenerateBypassStress.errcheck = check_xl_status
+xlMost150GenerateBypassStress.__doc__ = """
+xlapi.xlMost150GenerateBypassStress
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150EclConfigureSeq = _vector_xlapi_dll_.xlMost150EclConfigureSeq
 xlMost150EclConfigureSeq.restype = XLstatus
@@ -8347,6 +10764,16 @@ xlMost150EclConfigureSeq.argtypes = [
     ctypes.POINTER(ctypes.c_uint),
 ]
 xlMost150EclConfigureSeq.errcheck = check_xl_status
+xlMost150EclConfigureSeq.__doc__ = """
+xlapi.xlMost150EclConfigureSeq
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150EclGenerateSeq = _vector_xlapi_dll_.xlMost150EclGenerateSeq
 xlMost150EclGenerateSeq.restype = XLstatus
@@ -8361,6 +10788,16 @@ xlMost150EclGenerateSeq.argtypes = [
     ctypes.c_uint,
 ]
 xlMost150EclGenerateSeq.errcheck = check_xl_status
+xlMost150EclGenerateSeq.__doc__ = """
+xlapi.xlMost150EclGenerateSeq
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150SetECLGlitchFilter = _vector_xlapi_dll_.xlMost150SetECLGlitchFilter
 xlMost150SetECLGlitchFilter.restype = XLstatus
@@ -8375,6 +10812,16 @@ xlMost150SetECLGlitchFilter.argtypes = [
     ctypes.c_uint,
 ]
 xlMost150SetECLGlitchFilter.errcheck = check_xl_status
+xlMost150SetECLGlitchFilter.__doc__ = """
+xlapi.xlMost150SetECLGlitchFilter
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150SetSSOResult = _vector_xlapi_dll_.xlMost150SetSSOResult
 xlMost150SetSSOResult.restype = XLstatus
@@ -8389,6 +10836,16 @@ xlMost150SetSSOResult.argtypes = [
     ctypes.c_uint,
 ]
 xlMost150SetSSOResult.errcheck = check_xl_status
+xlMost150SetSSOResult.__doc__ = """
+xlapi.xlMost150SetSSOResult
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlMost150GetSSOResult = _vector_xlapi_dll_.xlMost150GetSSOResult
 xlMost150GetSSOResult.restype = XLstatus
@@ -8401,6 +10858,16 @@ xlMost150GetSSOResult.argtypes = [
     XLuserHandle,
 ]
 xlMost150GetSSOResult.errcheck = check_xl_status
+xlMost150GetSSOResult.__doc__ = """
+xlapi.xlMost150GetSSOResult
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlEthSetConfig = _vector_xlapi_dll_.xlEthSetConfig
 xlEthSetConfig.restype = XLstatus
@@ -8415,6 +10882,16 @@ xlEthSetConfig.argtypes = [
     ctypes.POINTER(T_XL_ETH_CONFIG),
 ]
 xlEthSetConfig.errcheck = check_xl_status
+xlEthSetConfig.__doc__ = """
+xlapi.xlEthSetConfig
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlEthGetConfig = _vector_xlapi_dll_.xlEthGetConfig
 xlEthGetConfig.restype = XLstatus
@@ -8429,6 +10906,16 @@ xlEthGetConfig.argtypes = [
     ctypes.POINTER(T_XL_ETH_CONFIG),
 ]
 xlEthGetConfig.errcheck = check_xl_status
+xlEthGetConfig.__doc__ = """
+xlapi.xlEthGetConfig
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlEthReceive = _vector_xlapi_dll_.xlEthReceive
 xlEthReceive.restype = XLstatus
@@ -8439,6 +10926,16 @@ xlEthReceive.argtypes = [
     ctypes.POINTER(T_XL_ETH_EVENT),
 ]
 xlEthReceive.errcheck = check_xl_status
+xlEthReceive.__doc__ = """
+xlapi.xlEthReceive
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlEthSetBypass = _vector_xlapi_dll_.xlEthSetBypass
 xlEthSetBypass.restype = XLstatus
@@ -8453,6 +10950,16 @@ xlEthSetBypass.argtypes = [
     ctypes.c_uint,
 ]
 xlEthSetBypass.errcheck = check_xl_status
+xlEthSetBypass.__doc__ = """
+xlapi.xlEthSetBypass
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlEthTwinkleStatusLed = _vector_xlapi_dll_.xlEthTwinkleStatusLed
 xlEthTwinkleStatusLed.restype = XLstatus
@@ -8465,6 +10972,16 @@ xlEthTwinkleStatusLed.argtypes = [
     XLuserHandle,
 ]
 xlEthTwinkleStatusLed.errcheck = check_xl_status
+xlEthTwinkleStatusLed.__doc__ = """
+xlapi.xlEthTwinkleStatusLed
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlEthTransmit = _vector_xlapi_dll_.xlEthTransmit
 xlEthTransmit.restype = XLstatus
@@ -8479,6 +10996,16 @@ xlEthTransmit.argtypes = [
     ctypes.POINTER(T_XL_ETH_DATAFRAME_TX),
 ]
 xlEthTransmit.errcheck = check_xl_status
+xlEthTransmit.__doc__ = """
+xlapi.xlEthTransmit
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlNetEthOpenNetwork = _vector_xlapi_dll_.xlNetEthOpenNetwork
 xlNetEthOpenNetwork.restype = XLstatus
@@ -8495,6 +11022,16 @@ xlNetEthOpenNetwork.argtypes = [
     ctypes.c_uint,
 ]
 xlNetEthOpenNetwork.errcheck = check_xl_status
+xlNetEthOpenNetwork.__doc__ = """
+xlapi.xlNetEthOpenNetwork
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlNetCloseNetwork = _vector_xlapi_dll_.xlNetCloseNetwork
 xlNetCloseNetwork.restype = XLstatus
@@ -8503,6 +11040,16 @@ xlNetCloseNetwork.argtypes = [
     XLnetworkHandle,
 ]
 xlNetCloseNetwork.errcheck = check_xl_status
+xlNetCloseNetwork.__doc__ = """
+xlapi.xlNetCloseNetwork
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlNetOpenVirtualPort = _vector_xlapi_dll_.xlNetOpenVirtualPort
 xlNetOpenVirtualPort.restype = XLstatus
@@ -8517,6 +11064,16 @@ xlNetOpenVirtualPort.argtypes = [
     XLrxHandle,
 ]
 xlNetOpenVirtualPort.errcheck = check_xl_status
+xlNetOpenVirtualPort.__doc__ = """
+xlapi.xlNetOpenVirtualPort
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlNetAddVirtualPort = _vector_xlapi_dll_.xlNetAddVirtualPort
 xlNetAddVirtualPort.restype = XLstatus
@@ -8533,6 +11090,16 @@ xlNetAddVirtualPort.argtypes = [
     XLrxHandle,
 ]
 xlNetAddVirtualPort.errcheck = check_xl_status
+xlNetAddVirtualPort.__doc__ = """
+xlapi.xlNetAddVirtualPort
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlNetConnectMeasurementPoint = _vector_xlapi_dll_.xlNetConnectMeasurementPoint
 xlNetConnectMeasurementPoint.restype = XLstatus
@@ -8547,6 +11114,16 @@ xlNetConnectMeasurementPoint.argtypes = [
     XLrxHandle,
 ]
 xlNetConnectMeasurementPoint.errcheck = check_xl_status
+xlNetConnectMeasurementPoint.__doc__ = """
+xlapi.xlNetConnectMeasurementPoint
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlNetActivateNetwork = _vector_xlapi_dll_.xlNetActivateNetwork
 xlNetActivateNetwork.restype = XLstatus
@@ -8555,6 +11132,16 @@ xlNetActivateNetwork.argtypes = [
     XLnetworkHandle,
 ]
 xlNetActivateNetwork.errcheck = check_xl_status
+xlNetActivateNetwork.__doc__ = """
+xlapi.xlNetActivateNetwork
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlNetDeactivateNetwork = _vector_xlapi_dll_.xlNetDeactivateNetwork
 xlNetDeactivateNetwork.restype = XLstatus
@@ -8563,6 +11150,16 @@ xlNetDeactivateNetwork.argtypes = [
     XLnetworkHandle,
 ]
 xlNetDeactivateNetwork.errcheck = check_xl_status
+xlNetDeactivateNetwork.__doc__ = """
+xlapi.xlNetDeactivateNetwork
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlNetEthSend = _vector_xlapi_dll_.xlNetEthSend
 xlNetEthSend.restype = XLstatus
@@ -8577,6 +11174,16 @@ xlNetEthSend.argtypes = [
     ctypes.POINTER(T_XL_NET_ETH_DATAFRAME_TX),
 ]
 xlNetEthSend.errcheck = check_xl_status
+xlNetEthSend.__doc__ = """
+xlapi.xlNetEthSend
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlNetEthReceive = _vector_xlapi_dll_.xlNetEthReceive
 xlNetEthReceive.restype = XLstatus
@@ -8591,6 +11198,16 @@ xlNetEthReceive.argtypes = [
     ctypes.POINTER(XLrxHandle),
 ]
 xlNetEthReceive.errcheck = check_xl_status
+xlNetEthReceive.__doc__ = """
+xlapi.xlNetEthReceive
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlNetEthRequestChannelStatus = _vector_xlapi_dll_.xlNetEthRequestChannelStatus
 xlNetEthRequestChannelStatus.restype = XLstatus
@@ -8599,6 +11216,16 @@ xlNetEthRequestChannelStatus.argtypes = [
     XLnetworkHandle,
 ]
 xlNetEthRequestChannelStatus.errcheck = check_xl_status
+xlNetEthRequestChannelStatus.__doc__ = """
+xlapi.xlNetEthRequestChannelStatus
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlNetSetNotification = _vector_xlapi_dll_.xlNetSetNotification
 xlNetSetNotification.restype = XLstatus
@@ -8611,6 +11238,16 @@ xlNetSetNotification.argtypes = [
     ctypes.c_int,
 ]
 xlNetSetNotification.errcheck = check_xl_status
+xlNetSetNotification.__doc__ = """
+xlapi.xlNetSetNotification
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlNetRequestMACAddress = _vector_xlapi_dll_.xlNetRequestMACAddress
 xlNetRequestMACAddress.restype = XLstatus
@@ -8621,6 +11258,16 @@ xlNetRequestMACAddress.argtypes = [
     ctypes.POINTER(T_XL_ETH_MAC_ADDRESS),
 ]
 xlNetRequestMACAddress.errcheck = check_xl_status
+xlNetRequestMACAddress.__doc__ = """
+xlapi.xlNetRequestMACAddress
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlNetReleaseMACAddress = _vector_xlapi_dll_.xlNetReleaseMACAddress
 xlNetReleaseMACAddress.restype = XLstatus
@@ -8631,6 +11278,16 @@ xlNetReleaseMACAddress.argtypes = [
     ctypes.POINTER(T_XL_ETH_MAC_ADDRESS),
 ]
 xlNetReleaseMACAddress.errcheck = check_xl_status
+xlNetReleaseMACAddress.__doc__ = """
+xlapi.xlNetReleaseMACAddress
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlNetFlushReceiveQueue = _vector_xlapi_dll_.xlNetFlushReceiveQueue
 xlNetFlushReceiveQueue.restype = XLstatus
@@ -8639,6 +11296,16 @@ xlNetFlushReceiveQueue.argtypes = [
     XLnetworkHandle,
 ]
 xlNetFlushReceiveQueue.errcheck = check_xl_status
+xlNetFlushReceiveQueue.__doc__ = """
+xlapi.xlNetFlushReceiveQueue
+
+Syntax:
+
+Args:
+
+Returns:
+    XLstatus (error code)
+"""
 
 xlA429Receive = _vector_xlapi_dll_.xlA429Receive
 xlA429Receive.restype = XLstatus
@@ -8649,6 +11316,20 @@ xlA429Receive.argtypes = [
     ctypes.POINTER(XLa429RxEvent),
 ]
 xlA429Receive.errcheck = check_xl_status
+xlA429Receive.__doc__ = """
+xlapi.xlA429Receive
+    Retrieves one event from the event queue. This operation is synchronous.
+Syntax:
+    XLstatus xlA429Receive (
+        XLportHandle portHandle,
+        XLa429Event* pXlA429Event
+    )
+Args:
+    portHandle: The port handle retrieved by xlOpenPort
+    pXlA429Event: Pointer to the application allocated receive event buffer
+Returns:
+    XLstatus (error code)
+"""
 
 xlA429SetChannelParams = _vector_xlapi_dll_.xlA429SetChannelParams
 xlA429SetChannelParams.restype = XLstatus
@@ -8661,6 +11342,24 @@ xlA429SetChannelParams.argtypes = [
     ctypes.POINTER(XL_A429_PARAMS),
 ]
 xlA429SetChannelParams.errcheck = check_xl_status
+xlA429SetChannelParams.__doc__ = """
+xlapi.xlA429SetChannelParams
+    This function configures basic ARINC 429 parameters. The device does not
+    keep those settings after a restart. This is a synchronous operation and
+    this function needs init access.
+Syntax:
+    XLstatus xlA429SetChannelParams(
+        XLportHandle portHandle,
+        XLaccess accessMask,
+        XL_A429_PARAMS* pXlA429Params
+    )
+Args:
+    portHandle: The port handle retrieved by xlOpenPort
+    accessMask: The access mask specifies the channels to be accessed
+    pXlA429Params: ARINC 429 configuration structure (XL_A429_PARAMS)
+Returns:
+    XLstatus (error code)
+"""
 
 xlA429Transmit = _vector_xlapi_dll_.xlA429Transmit
 xlA429Transmit.restype = XLstatus
@@ -8677,6 +11376,32 @@ xlA429Transmit.argtypes = [
     ctypes.POINTER(XL_A429_MSG_TX),
 ]
 xlA429Transmit.errcheck = check_xl_status
+xlA429Transmit.__doc__ = """
+xlapi.xlA429Transmit
+    The function writes ARINC 429 messages from host PC to the A429 interface.
+    It writes the transmit data to a transmit queue and the hardware
+    interface handles the message queue until all messages are transmitted.
+    It is possible to write more than one message to the message queue with
+    one call. This function is an asynchronous operation.
+Syntax:
+    XLstatus xlA429Transmit(
+        XLportHandle portHandle,
+        XLaccess accessMask,
+        unsigned int msgCnt,
+        unsigned int* pMsgCntSent,
+        XL_A429_MSG_TX* pXlA429MsgTx
+    )
+Args:
+    portHandle: The port handle retrieved by xlOpenPort
+    accessMask: The access mask specifies the channels to be accessed
+    msgCnt: Amount of messages to be transmitted
+    pMsgCntSent: Number of messages successfully transferred to the transmit queue
+    pXlA429MsgTx: Points to a user buffer with messages to be transmitted.
+                  At least the buffer must have the size of msgCnt multiplied
+                  with the size of XL_A429_MSG_TX structure
+Returns:
+    XLstatus (error code)
+"""
 
 xlGetKeymanBoxes = _vector_xlapi_dll_.xlGetKeymanBoxes
 xlGetKeymanBoxes.restype = XLstatus
@@ -8685,6 +11410,20 @@ xlGetKeymanBoxes.argtypes = [
     ctypes.POINTER(ctypes.c_uint),
 ]
 xlGetKeymanBoxes.errcheck = check_xl_status
+xlGetKeymanBoxes.__doc__ = """
+xlapi.xlGetKeymanBoxes
+    Returns the number of connected Keyman license dongles. In addition, all
+    available library relevant licenses (new license model only,
+    e.g. advanced FlexRay support) found on any connected Vector interface
+    are activated. The activation is required to use the advanced features of
+    the XL API.
+Syntax:
+    XLstatus xlGetKeymanBoxes(unsigned int* boxCount)
+Args:
+    boxCount: Number of connected Keyman license dongles
+Returns:
+    XLstatus (error code)
+"""
 
 xlGetKeymanInfo = _vector_xlapi_dll_.xlGetKeymanInfo
 xlGetKeymanInfo.restype = XLstatus
@@ -8699,3 +11438,28 @@ xlGetKeymanInfo.argtypes = [
     ctypes.POINTER(XLuint64),
 ]
 xlGetKeymanInfo.errcheck = check_xl_status
+xlGetKeymanInfo.__doc__ = """
+xlapi.xlGetKeymanInfo
+    This function returns the serial number and license info (license bits)
+    of a selected Keyman license dongle. This function is also required to
+    activate available licenses (old license model only), e.g. advanced
+    FlexRay support. Otherwise function calls will return XL_ERR_NO_LICENSE.
+    In order to activate single licenses of the old license model, get the
+    count of licenses via xlGetKeymanBoxes and then use the value range
+    (count-1) for the indexs in xlGetKeymanInfo.
+Syntax:
+    XLstatus xlGetKeymanInfo (
+        unsigned int boxIndex,
+        unsigned int* boxMask,
+        unsigned int* boxSerial,
+        XLuint64* licInfo
+    )
+Args:
+    boxIndex: Index of the Keyman license dongle (zero based)
+    boxMask: Mask of the Keyman license dongle
+    boxSerial: Serial of the Keyman license dongle
+    licInfo: License Info (license bits in license array). The structure's
+             size is 4*64 bits.
+Returns:
+    XLstatus (error code)
+"""
